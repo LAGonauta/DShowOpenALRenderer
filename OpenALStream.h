@@ -113,7 +113,7 @@ private:
   ALfloat m_volume;
 
   // Get from settings
-  uint32_t m_latency = 50;
+  uint32_t m_latency = 30;
   uint32_t m_frequency = 48000;
   bool m_muted = false;
 

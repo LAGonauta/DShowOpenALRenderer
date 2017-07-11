@@ -415,20 +415,6 @@ void COpenALStream::SoundLoop()
 
   while (m_run_thread)
   {
-    //static unsigned int number = 0;
-    //if (number >= 24000)
-    //{
-    //  auto value = m_openal_device.m_audio_buffer_queue.unsafe_begin();
-    //  wchar_t string_buf[1024] = { 0 };
-    //  swprintf(string_buf, L"Back value: %d\n", &value);
-    //  OutputDebugString(string_buf);
-    //  number = 0;
-    //}
-    //else
-    //{
-    //  ++number;
-    //}
-
     // Block until we have a free buffer
     int num_buffers_processed = 0;
     alGetSourcei(m_source, AL_BUFFERS_PROCESSED, &num_buffers_processed);
@@ -514,15 +500,17 @@ void COpenALStream::SoundLoop()
         continue;
       }
 
-      if (available_samples % STEREO_CHANNELS != 0)
-        --available_samples;
-
       // samples that will be buffered by OpenAL
       available_samples = available_samples / (num_buffers - num_buffers_queued);
 
       if (available_samples > OAL_MAX_FRAMES * STEREO_CHANNELS)
       {
         available_samples = OAL_MAX_FRAMES * STEREO_CHANNELS;
+      }
+
+      if (available_samples % STEREO_CHANNELS != 0)
+      {
+        --available_samples;
       }
 
       // Get data from queue
@@ -560,16 +548,8 @@ void COpenALStream::SoundLoop()
       // Buffer underrun occurred, resume playback
       alSourcePlay(m_source);
       err = CheckALError("occurred resuming playback");
+      OutputDebugString(L"Buffer under-flow\n");
     }
-
-    // Release the input pin mutex handle
-    //if (m_pin_locked)
-    //{
-    //  if (ReleaseMutex(m_pinput_pin->m_input_mutex))
-    //  {
-    //    m_pin_locked = false;
-    //  }
-    //}
   }
 }
 
