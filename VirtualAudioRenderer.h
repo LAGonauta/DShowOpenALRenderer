@@ -222,22 +222,25 @@ class CScopeFilter : public CBaseFilter, public CCritSec
 public:
   // Implements the IBaseFilter and IMediaFilter interfaces
 
+  //  Make one of these
+  //static CUnknown *CreateInstance(LPUNKNOWN punk, HRESULT *phr);
+
+  //  Constructor
+  CScopeFilter(LPUNKNOWN pUnk, HRESULT *phr);
+
   DECLARE_IUNKNOWN
 
-
+  STDMETHODIMP NonDelegatingQueryInterface(REFIID riid, void ** ppv);
   STDMETHODIMP Stop();
   STDMETHODIMP Pause();
   STDMETHODIMP Run(REFERENCE_TIME tStart);
-
-public:
+  STDMETHODIMP SetSyncSource(IReferenceClock *pClock);
 
   // OpenAL
-  OpenALStream m_openal_device;
+  COpenALStream m_openal_device;
 
   // Add samples to OpenAL queue
   void PrintOpenALQueueBack();
-
-  CScopeFilter(LPUNKNOWN pUnk, HRESULT *phr);
   virtual ~CScopeFilter();
 
   // Return the pins that we support
@@ -258,5 +261,6 @@ private:
 
   CScopeInputPin *m_pInputPin;   // Handles pin interfaces
   CScopeWindow m_Window;         // Looks after the window
+  //CCritSec m_Lock;     // Locking
 
 }; // CScopeFilter

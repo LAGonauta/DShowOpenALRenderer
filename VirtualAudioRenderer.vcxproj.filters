@@ -268,6 +268,9 @@
     <None Include="VirtualAudioRenderer.def">
       <Filter>Source Files</Filter>
     </None>
+    <None Include="README.md">
+      <Filter>Resource Files</Filter>
+    </None>
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="dialog_box.rc">

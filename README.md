@@ -1,1 +1,3 @@
-Based on VirtualAudioRenderer and DirectShow SDK Scope sample
+Based on VirtualAudioRenderer, on the DirectShow SDK Scope and Metronome samples.
+
+Does not work yet.

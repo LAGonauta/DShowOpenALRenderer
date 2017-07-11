@@ -11,6 +11,8 @@
 #include <include/OpenAL/al.h>
 #include <include/OpenAL/alc.h>
 
+#include "streams.h"
+
 // OpenAL requires a minimum of two buffers, three or more recommended
 #define OAL_BUFFERS 3
 #define OAL_MAX_FRAMES 65536
@@ -43,16 +45,31 @@
 #define AL_FORMAT_STEREO32 0x1203
 #endif
 
-class OpenALStream final
+class CScopeFilter;
+
+class COpenALStream final : public CBaseReferenceClock
 {
+  friend class CScopeFilter;
+
 public:
-  OpenALStream() : m_source(0) {}
-  bool Start();
-  void SoundLoop();
-  void SetVolume(int volume);
-  void Stop();
-  void Clear(bool mute);
-  void Update();
+  ~COpenALStream();
+  COpenALStream(LPUNKNOWN pUnk, HRESULT *phr);
+
+  REFERENCE_TIME GetPrivateTime();
+
+  void SetSyncSource(IReferenceClock *pClock);
+  static void CALLBACK Callback(HDRVR hdrvr, UINT uMsg, DWORD_PTR dwUser,
+    DWORD_PTR dw1, DWORD_PTR dw2);
+
+  IUnknown * pUnk()
+  {
+    return static_cast<IUnknown*>(static_cast<IReferenceClock*>(this));
+  }
+
+  STDMETHODIMP OpenDevice();
+  STDMETHODIMP CloseDevice();
+  STDMETHODIMP StartDevice(void);
+  STDMETHODIMP StopDevice(void);
 
   concurrency::concurrent_queue<__int16> m_audio_buffer_queue;
   concurrency::concurrent_queue<__int32> m_audio_buffer_queue_int32;
@@ -78,19 +95,44 @@ public:
 
 private:
   std::thread m_thread;
-  //Common::Flag m_run_thread;
-  bool m_run_thread = true;
+  bool m_run_thread = false;
 
-  //Common::Event m_sound_sync_event;
+  void SoundLoop();
+  void SetVolume(int volume);
+  void Stop();
 
   uint32_t num_buffers = 3;
 
   std::vector<ALuint> m_buffers;
-  ALuint m_source;
+  ALuint m_source = 0;
   ALfloat m_volume;
 
   // Get from settings
   uint32_t m_latency = 30;
   uint32_t m_frequency = 48000;
   bool m_muted = false;
+
+  // Clocking variables and functions
+  DWORD MetGetTime(void);
+  REFERENCE_TIME m_rtPrivateTime;
+  DWORD m_dwPrevSystemTime;
+
+  DWORD m_msPerTick;
+  DWORD m_LastTickTime;
+  DWORD m_LastTickTGT;
+
+  HWAVEIN m_hwi;
+  LPWAVEHDR m_pwh1, m_pwh2, m_pwh3, m_pwh4;
+  BOOL m_fWaveRunning;
+
+  DWORD m_SamplesSinceTick;
+  DWORD m_SamplesSinceSpike;
+  BOOL m_fSpikeAtStart;
+  DWORD m_dwLastMet;
+  DWORD m_dwLastTGT;
+
+  CCritSec m_csClock;
+
+  IReferenceClock* m_pCurrentRefClock;
+  IReferenceClock* m_pPrevRefClock;
 };

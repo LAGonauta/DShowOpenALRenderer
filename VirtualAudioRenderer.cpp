@@ -151,7 +151,8 @@ void CScopeFilter::PrintOpenALQueueBack()
 
 CScopeFilter::CScopeFilter(LPUNKNOWN pUnk, HRESULT *phr) :
   CBaseFilter(NAME("Oscilloscope"), pUnk, (CCritSec *) this, CLSID_Scope),
-  m_Window(NAME("Oscilloscope"), this, phr)
+  m_Window(NAME("Oscilloscope"), this, phr),
+  m_openal_device(static_cast<IBaseFilter*>(this), phr)
 {
   ASSERT(phr);
 
@@ -162,12 +163,6 @@ CScopeFilter::CScopeFilter(LPUNKNOWN pUnk, HRESULT *phr) :
     if (phr)
       *phr = E_OUTOFMEMORY;
   }
-
-  if (m_openal_device.Start())
-  {
-    OutputDebugStringW(L"Deu certo!");
-  }
-
 } // (Constructor)
 
 
@@ -249,7 +244,21 @@ STDMETHODIMP CScopeFilter::JoinFilterGraph(IFilterGraph *pGraph, LPCWSTR pName)
 } // JoinFilterGraph
 
 
-  //
+HRESULT CScopeFilter::NonDelegatingQueryInterface(REFIID riid, void ** ppv)
+{
+  CheckPointer(ppv, E_POINTER);
+
+  if (riid == IID_IReferenceClock)
+  {
+    return GetInterface(static_cast<IReferenceClock*>(&m_openal_device), ppv);
+  }
+  else
+  {
+    return CBaseFilter::NonDelegatingQueryInterface(riid, ppv);
+  }
+}
+
+//
   // Stop
   //
   // Switch the filter into stopped mode.
@@ -305,6 +314,12 @@ STDMETHODIMP CScopeFilter::Pause()
   }
 
   // tell the pin to go inactive and change state
+
+  if (m_State == State_Stopped)
+  {
+    m_openal_device.StartDevice();
+  }
+
   return CBaseFilter::Pause();
 
 } // Pause
@@ -340,6 +355,10 @@ STDMETHODIMP CScopeFilter::Run(REFERENCE_TIME tStart)
 
 } // Run
 
+STDMETHODIMP CScopeFilter::SetSyncSource(IReferenceClock * pClock)
+{
+  return CBaseFilter::SetSyncSource(pClock);
+}
 
   //
   // Constructor

@@ -101,6 +101,8 @@
       <Optimization>Disabled</Optimization>
       <LanguageStandard>stdcpplatest</LanguageStandard>
       <RemoveUnreferencedCodeData>true</RemoveUnreferencedCodeData>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <MinimalRebuild />
     </ClCompile>
     <Link>
       <ModuleDefinitionFile>VirtualAudioRenderer.def</ModuleDefinitionFile>
@@ -229,6 +231,7 @@
     <ClCompile Include="wxutil.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <None Include="README.md" />
     <None Include="VirtualAudioRenderer.def" />
   </ItemGroup>
   <ItemGroup>
