@@ -65,6 +65,7 @@
 #include <initguid.h>
 #include <wxdebug.h>
 #include "VirtualAudioRenderer.h"
+#include "OpenALStream.h"
 #include "resource.h"
 #include <strsafe.h>
 
@@ -80,7 +81,7 @@ const AMOVIESETUP_MEDIATYPE sudPinTypes =
 const AMOVIESETUP_PIN sudPins =
 {
   L"Input",                   // Pin string name
-  FALSE,                      // Is it rendered
+  TRUE,                       // Is it rendered
   FALSE,                      // Is it an output
   FALSE,                      // Allowed zero pins
   FALSE,                      // Allowed many
@@ -105,7 +106,7 @@ const AMOVIESETUP_FILTER sudScope =
 CFactoryTemplate g_Templates[] = {
   { L"Oscilloscope"
   , &CLSID_Scope
-  , CScopeFilter::CreateInstance
+  , (LPFNNewCOMObject)CScopeFilter::CreateInstance
   , NULL
   , &sudScope }
 };
@@ -151,8 +152,7 @@ void CScopeFilter::PrintOpenALQueueBack()
 
 CScopeFilter::CScopeFilter(LPUNKNOWN pUnk, HRESULT *phr) :
   CBaseFilter(NAME("Oscilloscope"), pUnk, (CCritSec *) this, CLSID_Scope),
-  m_Window(NAME("Oscilloscope"), this, phr),
-  m_openal_device(static_cast<IBaseFilter*>(this), phr)
+  m_Window(NAME("Oscilloscope"), this, phr)
 {
   ASSERT(phr);
 
@@ -163,6 +163,9 @@ CScopeFilter::CScopeFilter(LPUNKNOWN pUnk, HRESULT *phr) :
     if (phr)
       *phr = E_OUTOFMEMORY;
   }
+
+  m_openal_device = new COpenALStream(m_pInputPin, static_cast<IBaseFilter*>(this), phr);
+
 } // (Constructor)
 
 
@@ -177,7 +180,9 @@ CScopeFilter::~CScopeFilter()
   delete m_pInputPin;
   m_pInputPin = NULL;
 
-  m_openal_device.Stop();
+  ASSERT(m_openal_device);
+  delete m_openal_device;
+  m_openal_device = NULL;
 
 } // (Destructor)
 
@@ -250,7 +255,7 @@ HRESULT CScopeFilter::NonDelegatingQueryInterface(REFIID riid, void ** ppv)
 
   if (riid == IID_IReferenceClock)
   {
-    return GetInterface(static_cast<IReferenceClock*>(&m_openal_device), ppv);
+    return GetInterface(static_cast<IReferenceClock*>(m_openal_device), ppv);
   }
   else
   {
@@ -317,7 +322,7 @@ STDMETHODIMP CScopeFilter::Pause()
 
   if (m_State == State_Stopped)
   {
-    m_openal_device.StartDevice();
+    m_openal_device->StartDevice();
   }
 
   return CBaseFilter::Pause();
@@ -369,6 +374,7 @@ CScopeInputPin::CScopeInputPin(CScopeFilter *pFilter,
   CBaseInputPin(NAME("Scope Input Pin"), pFilter, pFilter, phr, pPinName)
 {
   m_pFilter = pFilter;
+  m_input_mutex = CreateMutex(nullptr, false, nullptr);
 
 } // (Constructor)
 
@@ -516,6 +522,8 @@ HRESULT CScopeInputPin::Inactive(void)
   //
 HRESULT CScopeInputPin::Receive(IMediaSample * pSample)
 {
+  WaitForSingleObject(m_input_mutex, INFINITE);
+
   // Lock this with the filter-wide lock
   CAutoLock lock(m_pFilter);
 
@@ -533,23 +541,11 @@ HRESULT CScopeInputPin::Receive(IMediaSample * pSample)
     return hr;
   }
 
+  ReleaseMutex(m_input_mutex);
   // Send the sample to the video window object for rendering
   return m_pFilter->m_Window.Receive(pSample);
 
 } // Receive
-  
-//  //
-//  // COpenALOutput Constructor
-//  //
-//COpenALOutput::COpenALOutput()
-//{
-//
-//}
-//
-//COpenALOutput::~COpenALOutput()
-//{
-//
-//}
 
   //
   // CScopeWindow Constructor
@@ -1664,11 +1660,11 @@ void CScopeWindow::CopyWaveform(IMediaSample *pMediaSample)
     {
       //m_pPoints1[m_nIndex].y = (int)((short)*pw++) / 256;
       short value = (short)*pw++;
-      m_pRenderer->m_openal_device.m_audio_buffer_queue.push(value);
+      m_pRenderer->m_openal_device->m_audio_buffer_queue.push(value);
       m_pPoints1[m_nIndex].y = (int)(value) / 256;
 
       value = (short)*pw++;
-      m_pRenderer->m_openal_device.m_audio_buffer_queue.push(value);
+      m_pRenderer->m_openal_device->m_audio_buffer_queue.push(value);
       m_pPoints2[m_nIndex].y = (int)(value) / 256;
 
       m_pRenderer->PrintOpenALQueueBack();

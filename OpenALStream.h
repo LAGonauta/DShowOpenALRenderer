@@ -45,21 +45,23 @@
 #define AL_FORMAT_STEREO32 0x1203
 #endif
 
-class CScopeFilter;
+class CScopeInputPin;
 
 class COpenALStream final : public CBaseReferenceClock
 {
-  friend class CScopeFilter;
+  friend class CScopeInputPin;
 
 public:
   ~COpenALStream();
-  COpenALStream(LPUNKNOWN pUnk, HRESULT *phr);
+  COpenALStream(CScopeInputPin* input_pin, LPUNKNOWN pUnk, HRESULT *phr);
 
-  REFERENCE_TIME GetPrivateTime();
+  // We must make this time depend on the sound card buffers latter,
+  // not on the system clock
+  //REFERENCE_TIME GetPrivateTime();
 
   void SetSyncSource(IReferenceClock *pClock);
-  static void CALLBACK Callback(HDRVR hdrvr, UINT uMsg, DWORD_PTR dwUser,
-    DWORD_PTR dw1, DWORD_PTR dw2);
+  void ClockController(HDRVR hdrvr, DWORD_PTR dwUser,
+                       DWORD_PTR dw2);
 
   IUnknown * pUnk()
   {
@@ -68,8 +70,8 @@ public:
 
   STDMETHODIMP OpenDevice();
   STDMETHODIMP CloseDevice();
-  STDMETHODIMP StartDevice(void);
-  STDMETHODIMP StopDevice(void);
+  STDMETHODIMP StartDevice();
+  STDMETHODIMP StopDevice();
 
   concurrency::concurrent_queue<__int16> m_audio_buffer_queue;
   concurrency::concurrent_queue<__int32> m_audio_buffer_queue_int32;
@@ -95,6 +97,8 @@ public:
 
 private:
   std::thread m_thread;
+  CScopeInputPin* m_pinput_pin;
+  bool m_pin_locked = false;
   bool m_run_thread = false;
 
   void SoundLoop();
@@ -108,7 +112,7 @@ private:
   ALfloat m_volume;
 
   // Get from settings
-  uint32_t m_latency = 30;
+  uint32_t m_latency = 50;
   uint32_t m_frequency = 48000;
   bool m_muted = false;
 
@@ -120,10 +124,6 @@ private:
   DWORD m_msPerTick;
   DWORD m_LastTickTime;
   DWORD m_LastTickTGT;
-
-  HWAVEIN m_hwi;
-  LPWAVEHDR m_pwh1, m_pwh2, m_pwh3, m_pwh4;
-  BOOL m_fWaveRunning;
 
   DWORD m_SamplesSinceTick;
   DWORD m_SamplesSinceSpike;

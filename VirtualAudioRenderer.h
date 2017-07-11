@@ -18,7 +18,7 @@ class COpenALOutput;
 
 // Class supporting the scope input pin
 
-class CScopeInputPin : public CBaseInputPin
+class CScopeInputPin : public CBaseInputPin, public CCritSec
 {
   friend class CScopeFilter;
   friend class CScopeWindow;
@@ -52,6 +52,9 @@ public:
   // Here's the next block of data from the stream.
   // AddRef it if you are going to hold onto it
   STDMETHODIMP Receive(IMediaSample *pSample);
+
+  // Input lock mutex
+  HANDLE m_input_mutex;
 
 }; // CScopeInputPin
 
@@ -237,7 +240,7 @@ public:
   STDMETHODIMP SetSyncSource(IReferenceClock *pClock);
 
   // OpenAL
-  COpenALStream m_openal_device;
+  COpenALStream* m_openal_device;
 
   // Add samples to OpenAL queue
   void PrintOpenALQueueBack();

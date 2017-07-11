@@ -11,17 +11,20 @@
 #include <array>
 
 #include "OpenALStream.h"
+#include "VirtualAudioRenderer.h"
 
 COpenALStream::~COpenALStream(void)
 {
-  Stop();
+  CloseDevice();
 }
 
-COpenALStream::COpenALStream(LPUNKNOWN pUnk, HRESULT * phr)
+COpenALStream::COpenALStream(CScopeInputPin* inputPin, LPUNKNOWN pUnk, HRESULT * phr)
   : CBaseReferenceClock(NAME("OpenAL Stream Clock"), pUnk, phr)
   , m_pCurrentRefClock(0), m_pPrevRefClock(0)
 {
   EXECUTE_ASSERT(SUCCEEDED(OpenDevice()));
+
+  m_pinput_pin = inputPin;
 
   // last time we reported
   m_dwLastMet = 0;
@@ -42,38 +45,39 @@ COpenALStream::COpenALStream(LPUNKNOWN pUnk, HRESULT * phr)
   m_dwLastTGT = m_dwPrevSystemTime;
 
   // We start off assuming the clock is running at normal speed
-  m_msPerTick = 625;
+  m_msPerTick = m_latency / num_buffers;
 
   DbgLog((LOG_TRACE, 1, TEXT("Creating clock at ref tgt=%d"), m_LastTickTime));
 }
 
-REFERENCE_TIME COpenALStream::GetPrivateTime()
-{
-  CAutoLock cObjectLock(this);
-
-  /* If the clock has wrapped then the current time will be less than
-  * the last time we were notified so add on the extra milliseconds
-  *
-  * The time period is long enough so that the likelihood of
-  * successive calls spanning the clock cycle is not considered.
-  */
-
-  // This returns the current time in ms according to our special clock.  If
-  // we used timeGetTime() here, our clock would run normally.
-  DWORD dwTime = MetGetTime();
-  {
-    REFERENCE_TIME delta = REFERENCE_TIME(dwTime) - REFERENCE_TIME(m_dwPrevSystemTime);
-    if (dwTime < m_dwPrevSystemTime)
-      delta += REFERENCE_TIME(UINT_MAX) + 1;
-
-    m_dwPrevSystemTime = dwTime;
-
-    delta *= (UNITS / MILLISECONDS);
-    m_rtPrivateTime += delta;
-  }
-
-  return m_rtPrivateTime;
-}
+//REFERENCE_TIME COpenALStream::GetPrivateTime()
+//{
+//  CAutoLock cObjectLock(this);
+//
+//  /* If the clock has wrapped then the current time will be less than
+//  * the last time we were notified so add on the extra milliseconds
+//  *
+//  * The time period is long enough so that the likelihood of
+//  * successive calls spanning the clock cycle is not considered.
+//  */
+//
+//  // This returns the current time in ms according to our special clock.  If
+//  // we used timeGetTime() here, our clock would run normally.
+//  //DWORD dwTime = MetGetTime();
+//  DWORD dwTime = timeGetTime();
+//  {
+//    REFERENCE_TIME delta = REFERENCE_TIME(dwTime) - REFERENCE_TIME(m_dwPrevSystemTime);
+//    if (dwTime < m_dwPrevSystemTime)
+//      delta += REFERENCE_TIME(UINT_MAX) + 1;
+//
+//    m_dwPrevSystemTime = dwTime;
+//
+//    delta *= (UNITS / MILLISECONDS);
+//    m_rtPrivateTime += delta;
+//  }
+//
+//  return m_rtPrivateTime;
+//}
 
 void COpenALStream::SetSyncSource(IReferenceClock * pClock)
 {
@@ -123,102 +127,68 @@ void COpenALStream::SetSyncSource(IReferenceClock * pClock)
   m_pCurrentRefClock = pClock;
 }
 
-void COpenALStream::Callback(HDRVR hdrvr, UINT uMsg, DWORD_PTR dwUser, DWORD_PTR dw1, DWORD_PTR dw2)
+void COpenALStream::ClockController(HDRVR hdrvr, DWORD_PTR dwUser, DWORD_PTR dw2)
 {
-  COpenALStream *pFilter = (COpenALStream *)dwUser;
+  COpenALStream* pFilter = (COpenALStream *)dwUser;
 
-  switch (uMsg)
+  // really need a second worker thread here, because
+  // one shouldn't do this much in a wave callback.
+
+  ASSERT(pFilter);
+
+  int spike;
+
+  // look for a spike in this buffer we just recorded
+
+    // don't let anybody else mess with our timing variables
+  pFilter->m_csClock.Lock();
+
+  // How long has it been since we saw a tick?
+  pFilter->m_SamplesSinceTick += spike;
+  DWORD msPerTickPrev = pFilter->m_msPerTick;
+
+  // Even though we just got the callback now, this stuff was
+  // recorded who knows how long ago, so what we're doing is not
+  // entirely correct... we're assuming that since we just noticed
+  // the tick means that it happened right now.  As long as our
+  // buffers are really small, and the system is very responsive,
+  // this won't be too bad.
+  DWORD dwTGT = timeGetTime();
+
+  // deal with clock stopping altogether for a while - pretend
+  // it kept ticking at its old rate or else we will think we're
+  // way ahead and the clock will freeze for the length of time
+  // the clock was stopped
+  // So if it's been a while since the last tick, don't use that
+  // long interval as a new tempo.  This way you can stop clapping
+  // and the movie will keep the current tempo until you start
+  // clapping a new tempo.
+  // (If it's been > 1.5s since the last tick, this is probably
+  //  the start of a new tempo).
+  if (pFilter->m_SamplesSinceTick * 1000 / 11025 > 1500)
   {
-  case WIM_DATA:
+    DbgLog((LOG_TRACE, 2, TEXT("Ignoring 1st TICK after long gap")));
+  }
+  else
   {
-    // really need a second worker thread here, because
-    // one shouldn't do this much in a wave callback.
+    // running our clock at the old rate, we'd be here right now
+    pFilter->m_LastTickTime = pFilter->m_dwLastMet +
+      (dwTGT - pFilter->m_dwLastTGT) *
+      625 / pFilter->m_msPerTick;
 
-    LPWAVEHDR lpwh = (LPWAVEHDR)dw1;
+    pFilter->m_msPerTick = (DWORD)((LONGLONG)
+      pFilter->m_SamplesSinceTick * 1000 / 11025);
 
-    ASSERT(lpwh);
-    ASSERT(pFilter);
+    pFilter->m_LastTickTGT = dwTGT;
 
-    DbgLog((LOG_TRACE, 4, TEXT("WAVEIN Callback: %d bytes recorded"),
-      lpwh->dwBytesRecorded));
-
-    LPBYTE lp = (LPBYTE)(lpwh->lpData);
-    int len = lpwh->dwBytesRecorded;
-    int spike;
-
-    // look for a spike in this buffer we just recorded
-    while (-1 != -1)
-    {
-      // don't let anybody else mess with our timing variables
-      pFilter->m_csClock.Lock();
-      lp += spike;
-      len -= spike;
-
-      // How long has it been since we saw a tick?
-      pFilter->m_SamplesSinceTick += spike;
-      DWORD msPerTickPrev = pFilter->m_msPerTick;
-
-      // Even though we just got the callback now, this stuff was
-      // recorded who knows how long ago, so what we're doing is not
-      // entirely correct... we're assuming that since we just noticed
-      // the tick means that it happened right now.  As long as our
-      // buffers are really small, and the system is very responsive,
-      // this won't be too bad.
-      DWORD dwTGT = timeGetTime();
-
-      // deal with clock stopping altogether for a while - pretend
-      // it kept ticking at its old rate or else we will think we're
-      // way ahead and the clock will freeze for the length of time
-      // the clock was stopped
-      // So if it's been a while since the last tick, don't use that
-      // long interval as a new tempo.  This way you can stop clapping
-      // and the movie will keep the current tempo until you start
-      // clapping a new tempo.
-      // (If it's been > 1.5s since the last tick, this is probably
-      //  the start of a new tempo).
-      if (pFilter->m_SamplesSinceTick * 1000 / 11025 > 1500)
-      {
-        DbgLog((LOG_TRACE, 2, TEXT("Ignoring 1st TICK after long gap")));
-      }
-      else
-      {
-        // running our clock at the old rate, we'd be here right now
-        pFilter->m_LastTickTime = pFilter->m_dwLastMet +
-          (dwTGT - pFilter->m_dwLastTGT) *
-          625 / pFilter->m_msPerTick;
-
-        pFilter->m_msPerTick = (DWORD)((LONGLONG)
-          pFilter->m_SamplesSinceTick * 1000 / 11025);
-
-        pFilter->m_LastTickTGT = dwTGT;
-
-        DbgLog((LOG_TRACE, 2, TEXT("TICK! after %dms, reporting %d tgt=%d"), pFilter->m_msPerTick, pFilter->m_LastTickTime, pFilter->m_LastTickTGT));
-      }
-
-      pFilter->m_SamplesSinceTick = 0;
-      pFilter->m_csClock.Unlock();
-    }
-
-    // we went the whole buffer without seeing a tick.
-    pFilter->m_SamplesSinceTick += len;
-
-    if (pFilter->m_fWaveRunning)
-    {
-      DbgLog((LOG_TRACE, 4, TEXT("Sending the buffer back")));
-      waveInAddBuffer(pFilter->m_hwi, lpwh, sizeof(WAVEHDR));
-    }
-
+    DbgLog((LOG_TRACE, 2, TEXT("TICK! after %dms, reporting %d tgt=%d"), pFilter->m_msPerTick, pFilter->m_LastTickTime, pFilter->m_LastTickTGT));
   }
-  break;
 
-  case WIM_OPEN:
-  case WIM_CLOSE:
-    break;
+  pFilter->m_SamplesSinceTick = 0;
+  pFilter->m_csClock.Unlock();
 
-  default:
-    DbgLog((LOG_TRACE, 2, TEXT("Unexpected wave callback message %d"), uMsg));
-    break;
-  }
+  // we went the whole buffer without seeing a tick.
+  //pFilter->m_SamplesSinceTick += len;
 }
 
 //
@@ -264,8 +234,11 @@ STDMETHODIMP COpenALStream::CloseDevice(void)
 
 STDMETHODIMP COpenALStream::StartDevice(void)
 {
-  m_run_thread = true;
-  m_thread = std::thread(&COpenALStream::SoundLoop, this);
+  if (m_run_thread == false)
+  {
+    m_run_thread = true;
+    m_thread = std::thread(&COpenALStream::SoundLoop, this);
+  }
 
   return S_OK;
 }
@@ -442,12 +415,36 @@ void COpenALStream::SoundLoop()
 
   while (m_run_thread)
   {
+    //static unsigned int number = 0;
+    //if (number >= 24000)
+    //{
+    //  auto value = m_openal_device.m_audio_buffer_queue.unsafe_begin();
+    //  wchar_t string_buf[1024] = { 0 };
+    //  swprintf(string_buf, L"Back value: %d\n", &value);
+    //  OutputDebugString(string_buf);
+    //  number = 0;
+    //}
+    //else
+    //{
+    //  ++number;
+    //}
+
     // Block until we have a free buffer
     int num_buffers_processed = 0;
     alGetSourcei(m_source, AL_BUFFERS_PROCESSED, &num_buffers_processed);
     if (num_buffers_queued == OAL_BUFFERS && !num_buffers_processed)
     {
       std::this_thread::sleep_for(std::chrono::milliseconds(1));
+
+      // Get the handle and lock the input pin
+      if (!m_pin_locked)
+      {
+        auto wait_result = WaitForSingleObject(m_pinput_pin->m_input_mutex, INFINITE);
+        if (wait_result == WAIT_OBJECT_0)
+        {
+          m_pin_locked = true;
+        }
+      }
       continue;
     }
 
@@ -460,6 +457,9 @@ void COpenALStream::SoundLoop()
 
       num_buffers_queued -= num_buffers_processed;
     }
+
+    // Control clock
+    //ClockController();
 
     size_t min_frames = frames_per_buffer;
 
@@ -502,7 +502,17 @@ void COpenALStream::SoundLoop()
       }
 
       if (available_samples < min_frames * STEREO_CHANNELS * (num_buffers - num_buffers_queued))
+      {
+        // Release the lock if there is not enough samples
+        if (m_pin_locked)
+        {
+          if (ReleaseMutex(m_pinput_pin->m_input_mutex))
+          {
+            m_pin_locked = false;
+          }
+        }
         continue;
+      }
 
       if (available_samples % STEREO_CHANNELS != 0)
         --available_samples;
@@ -510,8 +520,13 @@ void COpenALStream::SoundLoop()
       // samples that will be buffered by OpenAL
       available_samples = available_samples / (num_buffers - num_buffers_queued);
 
+      if (available_samples > OAL_MAX_FRAMES * STEREO_CHANNELS)
+      {
+        available_samples = OAL_MAX_FRAMES * STEREO_CHANNELS;
+      }
+
       // Get data from queue
-      std::array<__int16, OAL_MAX_FRAMES> short_data;
+      std::array<__int16, OAL_MAX_FRAMES * STEREO_CHANNELS> short_data;
 
       for (size_t i = 0; i < available_samples; ++i)
       {
@@ -546,6 +561,15 @@ void COpenALStream::SoundLoop()
       alSourcePlay(m_source);
       err = CheckALError("occurred resuming playback");
     }
+
+    // Release the input pin mutex handle
+    //if (m_pin_locked)
+    //{
+    //  if (ReleaseMutex(m_pinput_pin->m_input_mutex))
+    //  {
+    //    m_pin_locked = false;
+    //  }
+    //}
   }
 }
 
