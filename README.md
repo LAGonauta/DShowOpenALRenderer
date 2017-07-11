@@ -1,0 +1,1 @@
+Based on VirtualAudioRenderer and DirectShow SDK Scope sample

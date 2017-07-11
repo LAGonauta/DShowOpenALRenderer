@@ -1,0 +1,240 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" ToolsVersion="15.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Debug|Win32">
+      <Configuration>Debug</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|Win32">
+      <Configuration>Release</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Debug|x64">
+      <Configuration>Debug</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|x64">
+      <Configuration>Release</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+  </ItemGroup>
+  <PropertyGroup Label="Globals">
+    <ProjectGuid>{0246D7DA-058C-43C6-AAE6-B2B87B0EDB01}</ProjectGuid>
+    <RootNamespace>VirtualAudioRenderer</RootNamespace>
+    <WindowsTargetPlatformVersion>8.1</WindowsTargetPlatformVersion>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
+    <ConfigurationType>DynamicLibrary</ConfigurationType>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <PlatformToolset>v141</PlatformToolset>
+    <CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="Configuration">
+    <ConfigurationType>DynamicLibrary</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <PlatformToolset>v141</PlatformToolset>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+    <CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
+    <ConfigurationType>DynamicLibrary</ConfigurationType>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <PlatformToolset>v141</PlatformToolset>
+    <CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
+    <ConfigurationType>DynamicLibrary</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <PlatformToolset>v141</PlatformToolset>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+    <CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <ImportGroup Label="ExtensionSettings">
+  </ImportGroup>
+  <ImportGroup Label="Shared">
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <PropertyGroup Label="UserMacros" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <IncludePath>$(ProjectDir);$(VC_IncludePath);$(WindowsSDK_IncludePath);</IncludePath>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <IncludePath>$(ProjectDir);$(VC_IncludePath);$(WindowsSDK_IncludePath);</IncludePath>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <IncludePath>$(ProjectDir);$(VC_IncludePath);$(WindowsSDK_IncludePath)</IncludePath>
+    <LibraryPath>$(LibraryPath)</LibraryPath>
+    <LinkIncremental>true</LinkIncremental>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <IncludePath>$(ProjectDir);$(VC_IncludePath);$(WindowsSDK_IncludePath);</IncludePath>
+  </PropertyGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <Optimization>Disabled</Optimization>
+    </ClCompile>
+    <Link>
+      <ModuleDefinitionFile>VirtualAudioRenderer.def</ModuleDefinitionFile>
+      <AdditionalDependencies>Winmm.lib;strmiids.lib;atls.lib;mfc140d.lib;ucrtd.lib;vcruntimed.lib;msvcrtd.lib;comsupp.lib;kernel32.lib;user32.lib;gdi32.lib;winspool.lib;comdlg32.lib;advapi32.lib;shell32.lib;ole32.lib;oleaut32.lib;uuid.lib;odbc32.lib;odbccp32.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <IgnoreAllDefaultLibraries>true</IgnoreAllDefaultLibraries>
+      <SubSystem>Windows</SubSystem>
+      <EntryPointSymbol>DllMain</EntryPointSymbol>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <Optimization>Disabled</Optimization>
+      <LanguageStandard>stdcpplatest</LanguageStandard>
+      <RemoveUnreferencedCodeData>true</RemoveUnreferencedCodeData>
+    </ClCompile>
+    <Link>
+      <ModuleDefinitionFile>VirtualAudioRenderer.def</ModuleDefinitionFile>
+      <AdditionalDependencies>Winmm.lib;strmiids.lib;atls.lib;mfc140d.lib;ucrtd.lib;vcruntimed.lib;msvcrtd.lib;chkstk.obj;comsupp.lib;kernel32.lib;user32.lib;gdi32.lib;winspool.lib;comdlg32.lib;advapi32.lib;shell32.lib;ole32.lib;oleaut32.lib;uuid.lib;odbc32.lib;odbccp32.lib;OpenAL32.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <IgnoreAllDefaultLibraries>
+      </IgnoreAllDefaultLibraries>
+      <SubSystem>Windows</SubSystem>
+      <EntryPointSymbol>DllMain</EntryPointSymbol>
+      <AdditionalLibraryDirectories>$(ProjectDir)lib\OpenAL\Win64;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <Optimization>MaxSpeed</Optimization>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+    </ClCompile>
+    <Link>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <OptimizeReferences>true</OptimizeReferences>
+      <ModuleDefinitionFile>VirtualAudioRenderer.def</ModuleDefinitionFile>
+      <AdditionalDependencies>Winmm.lib;strmiids.lib;atls.lib;mfc140.lib;ucrt.lib;vcruntime.lib;comsupp.lib;msvcrt.lib;kernel32.lib;user32.lib;gdi32.lib;winspool.lib;comdlg32.lib;advapi32.lib;shell32.lib;ole32.lib;oleaut32.lib;uuid.lib;odbc32.lib;odbccp32.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <IgnoreAllDefaultLibraries>true</IgnoreAllDefaultLibraries>
+      <SubSystem>Windows</SubSystem>
+      <EntryPointSymbol>DllMain</EntryPointSymbol>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <Optimization>MaxSpeed</Optimization>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <LanguageStandard>stdcpplatest</LanguageStandard>
+    </ClCompile>
+    <Link>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <OptimizeReferences>true</OptimizeReferences>
+      <ModuleDefinitionFile>VirtualAudioRenderer.def</ModuleDefinitionFile>
+      <AdditionalDependencies>Winmm.lib;strmiids.lib;atls.lib;mfc140.lib;ucrt.lib;vcruntime.lib;comsupp.lib;msvcrt.lib;kernel32.lib;user32.lib;gdi32.lib;winspool.lib;comdlg32.lib;advapi32.lib;shell32.lib;ole32.lib;oleaut32.lib;uuid.lib;odbc32.lib;odbccp32.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <IgnoreAllDefaultLibraries>true</IgnoreAllDefaultLibraries>
+      <SubSystem>Windows</SubSystem>
+      <EntryPointSymbol>DllMain</EntryPointSymbol>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemGroup>
+    <ClInclude Include="amextra.h" />
+    <ClInclude Include="amfilter.h" />
+    <ClInclude Include="cache.h" />
+    <ClInclude Include="checkbmi.h" />
+    <ClInclude Include="combase.h" />
+    <ClInclude Include="cprop.h" />
+    <ClInclude Include="ctlutil.h" />
+    <ClInclude Include="ddmm.h" />
+    <ClInclude Include="dllsetup.h" />
+    <ClInclude Include="dxmperf.h" />
+    <ClInclude Include="fourcc.h" />
+    <ClInclude Include="include\OpenAL\al.h" />
+    <ClInclude Include="include\OpenAL\alc.h" />
+    <ClInclude Include="include\OpenAL\efx-creative.h" />
+    <ClInclude Include="include\OpenAL\EFX-Util.h" />
+    <ClInclude Include="include\OpenAL\efx.h" />
+    <ClInclude Include="include\OpenAL\xram.h" />
+    <ClInclude Include="measure.h" />
+    <ClInclude Include="msgthrd.h" />
+    <ClInclude Include="mtype.h" />
+    <ClInclude Include="OpenALStream.h" />
+    <ClInclude Include="outputq.h" />
+    <ClInclude Include="perflog.h" />
+    <ClInclude Include="perfstruct.h" />
+    <ClInclude Include="pstream.h" />
+    <ClInclude Include="pullpin.h" />
+    <ClInclude Include="refclock.h" />
+    <ClInclude Include="reftime.h" />
+    <ClInclude Include="renbase.h" />
+    <ClInclude Include="resource.h" />
+    <ClInclude Include="schedule.h" />
+    <ClInclude Include="seekpt.h" />
+    <ClInclude Include="source.h" />
+    <ClInclude Include="streams.h" />
+    <ClInclude Include="strmctl.h" />
+    <ClInclude Include="sysclock.h" />
+    <ClInclude Include="transfrm.h" />
+    <ClInclude Include="transip.h" />
+    <ClInclude Include="videoctl.h" />
+    <ClInclude Include="VirtualAudioRenderer.h" />
+    <ClInclude Include="vtrans.h" />
+    <ClInclude Include="winctrl.h" />
+    <ClInclude Include="winutil.h" />
+    <ClInclude Include="wxdebug.h" />
+    <ClInclude Include="wxlist.h" />
+    <ClInclude Include="wxutil.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="amextra.cpp" />
+    <ClCompile Include="amfilter.cpp" />
+    <ClCompile Include="amvideo.cpp" />
+    <ClCompile Include="arithutil.cpp" />
+    <ClCompile Include="combase.cpp" />
+    <ClCompile Include="cprop.cpp" />
+    <ClCompile Include="ctlutil.cpp" />
+    <ClCompile Include="ddmm.cpp" />
+    <ClCompile Include="dllentry.cpp" />
+    <ClCompile Include="dllsetup.cpp" />
+    <ClCompile Include="mtype.cpp" />
+    <ClCompile Include="OpenALStream.cpp" />
+    <ClCompile Include="outputq.cpp" />
+    <ClCompile Include="perflog.cpp" />
+    <ClCompile Include="pstream.cpp" />
+    <ClCompile Include="pullpin.cpp" />
+    <ClCompile Include="refclock.cpp" />
+    <ClCompile Include="renbase.cpp" />
+    <ClCompile Include="schedule.cpp" />
+    <ClCompile Include="seekpt.cpp" />
+    <ClCompile Include="source.cpp" />
+    <ClCompile Include="strmctl.cpp" />
+    <ClCompile Include="sysclock.cpp" />
+    <ClCompile Include="transfrm.cpp" />
+    <ClCompile Include="transip.cpp" />
+    <ClCompile Include="videoctl.cpp" />
+    <ClCompile Include="VirtualAudioRenderer.cpp" />
+    <ClCompile Include="vtrans.cpp" />
+    <ClCompile Include="winctrl.cpp" />
+    <ClCompile Include="winutil.cpp" />
+    <ClCompile Include="wxdebug.cpp" />
+    <ClCompile Include="wxlist.cpp" />
+    <ClCompile Include="wxutil.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="VirtualAudioRenderer.def" />
+  </ItemGroup>
+  <ItemGroup>
+    <ResourceCompile Include="dialog_box.rc" />
+  </ItemGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+  <ImportGroup Label="ExtensionTargets">
+  </ImportGroup>
+</Project>
