@@ -181,7 +181,6 @@
     <ClInclude Include="refclock.h" />
     <ClInclude Include="reftime.h" />
     <ClInclude Include="renbase.h" />
-    <ClInclude Include="resource.h" />
     <ClInclude Include="schedule.h" />
     <ClInclude Include="seekpt.h" />
     <ClInclude Include="source.h" />
@@ -237,9 +236,6 @@
   <ItemGroup>
     <None Include="README.md" />
     <None Include="VirtualAudioRenderer.def" />
-  </ItemGroup>
-  <ItemGroup>
-    <ResourceCompile Include="dialog_box.rc" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

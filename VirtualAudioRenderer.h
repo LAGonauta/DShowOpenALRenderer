@@ -75,15 +75,6 @@ public:
 
    // These are the video window styles
 
-const DWORD dwTEXTSTYLES = (WS_POPUP | WS_CAPTION | WS_THICKFRAME | WS_MINIMIZEBOX | WS_MAXIMIZEBOX | WS_CLIPCHILDREN);
-const DWORD dwCLASSSTYLES = (CS_HREDRAW | CS_VREDRAW | CS_BYTEALIGNCLIENT | CS_OWNDC);
-const LPTSTR RENDERCLASS = TEXT("OscilloscopeWindowClass\0");
-const LPTSTR TITLE = TEXT("Oscilloscope\0");
-
-const int iWIDTH = 320;             // Initial window width
-const int iHEIGHT = 240;            // Initial window height
-const int WM_GOODBYE(WM_USER + 2); // Sent to close the window
-
 class CScopeWindow : public CCritSec
 {
   friend class CScopeInputPin;
@@ -94,29 +85,7 @@ private:
   HINSTANCE m_hInstance;          // Global module instance handle
   CScopeFilter *m_pRenderer;      // The owning renderer object
 
-  HWND m_hwndDlg;                 // Handle for our dialog
-  HWND m_hwnd;                    // Handle for the graph window
-  HBRUSH m_hBrushBackground;      // Used to paint background
-  HPEN m_hPen1;                   // We use two pens for drawing
-  HPEN m_hPen2;                   //  the waveforms in the window
-  HPEN m_hPenTicks;               // Used to draw ticks at bottom
-  HBITMAP m_hBitmap;              // Draw all waveforms into here
-  HANDLE m_hThread;               // Our worker thread
-  DWORD m_ThreadID;               // Worker thread ID
-
-  CAMEvent m_SyncWorker;          // Synchronise with worker thread
-  CAMEvent m_RenderEvent;         // Signals sample to render
-
-  LONG m_Width;                   // Client window width
-  LONG m_Height;                  // Client window height
-  BOOL m_bActivated;              // Has the window been activated
-
-  CRefTime m_StartSample;         // Most recent sample start time
-  CRefTime m_EndSample;           // And it's associated end time
-
   BOOL m_bStreaming;              // Are we currently streaming
-  POINT *m_pPoints1;              // Array of points to graph Channel1
-  POINT *m_pPoints2;              // Array of points to graph Channel2
 
   int m_nPoints;                  // Size of m_pPoints[1|2]
   int m_nIndex;                   // Index of last sample written
@@ -128,77 +97,7 @@ private:
   int m_nBlockAlign;              // Alignment on the samples
   int m_MaxValue;                 // Max Value of the POINTS array
 
-  int m_LGain;                    // Left channel control settings
-  int m_LOffset;                  //  And likewise its offset
-  int m_RGain;                    // Right channel control settings
-  int m_ROffset;                  //  And likewise its offset
-  int m_nTimebase;                // Timebase settings
-
-  BOOL m_fFreeze;                 // Flag toi signal we're UI frozen
-  int m_TBScroll;                 // Holds position in scroll range
-
-                                  // Hold window handles to controls
-
-  HWND m_hwndLGain;
-  HWND m_hwndLOffset;
-  HWND m_hwndLGainText;
-  HWND m_hwndLTitle;
-  HWND m_hwndRGain;
-  HWND m_hwndROffset;
-  HWND m_hwndRGainText;
-  HWND m_hwndRTitle;
-  HWND m_hwndTimebase;
-  HWND m_hwndFreeze;
-  HWND m_hwndTBScroll;
-  HWND m_hwndTBStart;
-  HWND m_hwndTBEnd;
-  HWND m_hwndTBDelta;
-
-  BOOL m_fTriggerPosZeroCrossing;
-
-  // These create and manage a video window on a separate thread
-
-  HRESULT UninitialiseWindow();
-  HRESULT InitialiseWindow(HWND hwnd);
-  HRESULT MessageLoop();
-
-  static DWORD __stdcall WindowMessageLoop(LPVOID lpvThreadParm);
-
-  // Maps windows message loop into C++ virtual methods
-  friend LRESULT CALLBACK WndProc(HWND hwnd,      // Window handle
-    UINT uMsg,      // Message ID
-    WPARAM wParam,  // First parameter
-    LPARAM lParam); // Other parameter
-
-                    // Called when we start and stop streaming
-  HRESULT ResetStreamingTimes();
-
-  // Window message handlers
-  BOOL OnClose();
-  BOOL OnPaint();
-
-  // Draw the waveform
-  void ClearWindow(HDC hdc);
-  BOOL AllocWaveBuffers(void);
-  void SearchForPosZeroCrossing(int StartPoint, int * IndexEdge);
   void CopyWaveform(IMediaSample *pMediaSample);
-
-  void DrawPartialWaveform(HDC hdc,
-    int IndexStart,
-    int IndexEnd,
-    int ViewportStart,
-    int ViewportEnd);
-
-  void DrawWaveform(void);
-  void SetControlRanges(HWND hDlg);
-  void SetHorizScrollRange(HWND hDlg);
-  void ProcessVertScrollCommands(HWND hDlg, WPARAM wParam, LPARAM lParam);
-  void ProcessHorizScrollCommands(HWND hDlg, WPARAM wParam, LPARAM lParam);
-
-  friend BOOL CALLBACK ScopeDlgProc(HWND hwnd,        // Window handle
-    UINT uMsg,          // Message ID
-    WPARAM wParam,      // First parameter
-    LPARAM lParam);     // Other parameter
 
 public:
 
@@ -209,8 +108,6 @@ public:
 
   HRESULT StartStreaming();
   HRESULT StopStreaming();
-  HRESULT InactivateWindow();
-  HRESULT ActivateWindow();
 
   // Called when the input pin receives a sample
   HRESULT Receive(IMediaSample * pIn);

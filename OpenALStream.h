@@ -73,9 +73,10 @@ public:
   STDMETHODIMP StartDevice();
   STDMETHODIMP StopDevice();
 
-  concurrency::concurrent_queue<__int16> m_audio_buffer_queue;
-  concurrency::concurrent_queue<__int32> m_audio_buffer_queue_int32;
-  concurrency::concurrent_queue<float> m_audio_buffer_queue_float;
+  concurrency::concurrent_queue<uint8_t> m_audio_buffer_queue_int8;
+  concurrency::concurrent_queue<int16_t> m_audio_buffer_queue;
+  concurrency::concurrent_queue<int32_t> m_audio_buffer_queue_int32;
+  concurrency::concurrent_queue<float_t> m_audio_buffer_queue_float;
 
   enum SpeakerLayout
   {
