@@ -45,15 +45,15 @@
 #define AL_FORMAT_STEREO32 0x1203
 #endif
 
-class CScopeInputPin;
+class CAudioInputPin;
 
 class COpenALStream final : public CBaseReferenceClock
 {
-  friend class CScopeInputPin;
+  friend class CAudioInputPin;
 
 public:
   ~COpenALStream();
-  COpenALStream(CScopeInputPin* input_pin, LPUNKNOWN pUnk, HRESULT *phr);
+  COpenALStream(CAudioInputPin* input_pin, LPUNKNOWN pUnk, HRESULT *phr);
 
   // We must make this time depend on the sound card buffers latter,
   // not on the system clock
@@ -100,7 +100,7 @@ public:
 
 private:
   std::thread m_thread;
-  CScopeInputPin* m_pinput_pin;
+  CAudioInputPin* m_pinput_pin;
   bool m_pin_locked = false;
   bool m_run_thread = false;
 

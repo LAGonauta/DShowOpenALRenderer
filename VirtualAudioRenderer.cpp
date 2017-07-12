@@ -105,7 +105,7 @@ const AMOVIESETUP_FILTER sudScope =
 CFactoryTemplate g_Templates[] = {
   { L"Oscilloscope"
   , &CLSID_Scope
-  , (LPFNNewCOMObject)CScopeFilter::CreateInstance
+  , (LPFNNewCOMObject)COpenALFilter::CreateInstance
   , NULL
   , &sudScope }
 };
@@ -118,9 +118,9 @@ int g_cTemplates = sizeof(g_Templates) / sizeof(g_Templates[0]);
 //
 // This goes in the factory template table to create new instances
 //
-CUnknown * WINAPI CScopeFilter::CreateInstance(LPUNKNOWN pUnk, HRESULT *phr)
+CUnknown * WINAPI COpenALFilter::CreateInstance(LPUNKNOWN pUnk, HRESULT *phr)
 {
-  return new CScopeFilter(pUnk, phr);
+  return new COpenALFilter(pUnk, phr);
 
 } // CreateInstance
 
@@ -132,7 +132,7 @@ CUnknown * WINAPI CScopeFilter::CreateInstance(LPUNKNOWN pUnk, HRESULT *phr)
   //
 #pragma warning(disable:4355 4127)
 
-void CScopeFilter::PrintOpenALQueueBack()
+void COpenALFilter::PrintOpenALQueueBack()
 {
   //static unsigned int number = 0;
   //if (number >= 24000)
@@ -149,14 +149,14 @@ void CScopeFilter::PrintOpenALQueueBack()
   //}
 }
 
-CScopeFilter::CScopeFilter(LPUNKNOWN pUnk, HRESULT *phr) :
+COpenALFilter::COpenALFilter(LPUNKNOWN pUnk, HRESULT *phr) :
   CBaseFilter(NAME("Oscilloscope"), pUnk, (CCritSec *) this, CLSID_Scope),
   m_Window(NAME("Oscilloscope"), this, phr)
 {
   ASSERT(phr);
 
   // Create the single input pin
-  m_pInputPin = new CScopeInputPin(this, phr, L"Scope Input Pin");
+  m_pInputPin = new CAudioInputPin(this, phr, L"Scope Input Pin");
   if (m_pInputPin == NULL)
   {
     if (phr)
@@ -171,7 +171,7 @@ CScopeFilter::CScopeFilter(LPUNKNOWN pUnk, HRESULT *phr) :
   //
   // Destructor
   //
-CScopeFilter::~CScopeFilter()
+COpenALFilter::~COpenALFilter()
 {
   // Delete the contained interfaces
 
@@ -191,7 +191,7 @@ CScopeFilter::~CScopeFilter()
   //
   // Return the number of input pins we support
   //
-int CScopeFilter::GetPinCount()
+int COpenALFilter::GetPinCount()
 {
   return 1;
 
@@ -203,7 +203,7 @@ int CScopeFilter::GetPinCount()
   //
   // Return our single input pin - not addrefed
   //
-CBasePin *CScopeFilter::GetPin(int n)
+CBasePin *COpenALFilter::GetPin(int n)
 {
   // We only support one input pin and it is numbered zero
 
@@ -224,7 +224,7 @@ CBasePin *CScopeFilter::GetPin(int n)
   // Show our window when we join a filter graph
   //   - and hide it when we are annexed from it
   //
-STDMETHODIMP CScopeFilter::JoinFilterGraph(IFilterGraph *pGraph, LPCWSTR pName)
+STDMETHODIMP COpenALFilter::JoinFilterGraph(IFilterGraph *pGraph, LPCWSTR pName)
 {
   HRESULT hr = CBaseFilter::JoinFilterGraph(pGraph, pName);
   if (FAILED(hr))
@@ -237,7 +237,7 @@ STDMETHODIMP CScopeFilter::JoinFilterGraph(IFilterGraph *pGraph, LPCWSTR pName)
 } // JoinFilterGraph
 
 
-HRESULT CScopeFilter::NonDelegatingQueryInterface(REFIID riid, void ** ppv)
+HRESULT COpenALFilter::NonDelegatingQueryInterface(REFIID riid, void ** ppv)
 {
   CheckPointer(ppv, E_POINTER);
 
@@ -256,7 +256,7 @@ HRESULT CScopeFilter::NonDelegatingQueryInterface(REFIID riid, void ** ppv)
   //
   // Switch the filter into stopped mode.
   //
-STDMETHODIMP CScopeFilter::Stop()
+STDMETHODIMP COpenALFilter::Stop()
 {
   CAutoLock lock(this);
 
@@ -295,7 +295,7 @@ STDMETHODIMP CScopeFilter::Stop()
   //
   // Override Pause to stop the window streaming
   //
-STDMETHODIMP CScopeFilter::Pause()
+STDMETHODIMP COpenALFilter::Pause()
 {
   CAutoLock lock(this);
 
@@ -323,7 +323,7 @@ STDMETHODIMP CScopeFilter::Pause()
   //
   // Overriden to start the window streaming
   //
-STDMETHODIMP CScopeFilter::Run(REFERENCE_TIME tStart)
+STDMETHODIMP COpenALFilter::Run(REFERENCE_TIME tStart)
 {
   CAutoLock lock(this);
   HRESULT hr = NOERROR;
@@ -346,7 +346,7 @@ STDMETHODIMP CScopeFilter::Run(REFERENCE_TIME tStart)
 
 } // Run
 
-STDMETHODIMP CScopeFilter::SetSyncSource(IReferenceClock * pClock)
+STDMETHODIMP COpenALFilter::SetSyncSource(IReferenceClock * pClock)
 {
   return CBaseFilter::SetSyncSource(pClock);
 }
@@ -354,13 +354,12 @@ STDMETHODIMP CScopeFilter::SetSyncSource(IReferenceClock * pClock)
   //
   // Constructor
   //
-CScopeInputPin::CScopeInputPin(CScopeFilter *pFilter,
+CAudioInputPin::CAudioInputPin(COpenALFilter *pFilter,
   HRESULT *phr,
   LPCWSTR pPinName) :
   CBaseInputPin(NAME("Scope Input Pin"), pFilter, pFilter, phr, pPinName)
 {
   m_pFilter = pFilter;
-  m_input_mutex = CreateMutex(nullptr, false, nullptr);
 
 } // (Constructor)
 
@@ -368,7 +367,7 @@ CScopeInputPin::CScopeInputPin(CScopeFilter *pFilter,
   //
   // Destructor does nothing
   //
-CScopeInputPin::~CScopeInputPin()
+CAudioInputPin::~CAudioInputPin()
 {
 } // (Destructor)
 
@@ -382,7 +381,7 @@ CScopeInputPin::~CScopeInputPin()
   // leave the format block alone as it will be reallocated if we get another
   // connection or alternatively be deleted if the filter is finally released
   //
-HRESULT CScopeInputPin::BreakConnect()
+HRESULT CAudioInputPin::BreakConnect()
 {
   // Check we have a valid connection
 
@@ -409,7 +408,7 @@ HRESULT CScopeInputPin::BreakConnect()
   //
   // Check that we can support a given proposed type
   //
-HRESULT CScopeInputPin::CheckMediaType(const CMediaType *pmt)
+HRESULT CAudioInputPin::CheckMediaType(const CMediaType *pmt)
 {
   CheckPointer(pmt, E_POINTER);
 
@@ -445,7 +444,7 @@ HRESULT CScopeInputPin::CheckMediaType(const CMediaType *pmt)
   //
   // Actually set the format of the input pin
   //
-HRESULT CScopeInputPin::SetMediaType(const CMediaType *pmt)
+HRESULT CAudioInputPin::SetMediaType(const CMediaType *pmt)
 {
   CheckPointer(pmt, E_POINTER);
   CAutoLock lock(m_pFilter);
@@ -477,7 +476,7 @@ HRESULT CScopeInputPin::SetMediaType(const CMediaType *pmt)
   //
   // Implements the remaining IMemInputPin virtual methods
   //
-HRESULT CScopeInputPin::Active(void)
+HRESULT CAudioInputPin::Active(void)
 {
   return NOERROR;
 
@@ -489,7 +488,7 @@ HRESULT CScopeInputPin::Active(void)
   //
   // Called when the filter is stopped
   //
-HRESULT CScopeInputPin::Inactive(void)
+HRESULT CAudioInputPin::Inactive(void)
 {
   return NOERROR;
 
@@ -501,10 +500,8 @@ HRESULT CScopeInputPin::Inactive(void)
   //
   // Here's the next block of data from the stream
   //
-HRESULT CScopeInputPin::Receive(IMediaSample * pSample)
+HRESULT CAudioInputPin::Receive(IMediaSample * pSample)
 {
-  WaitForSingleObject(m_input_mutex, INFINITE);
-
   // Lock this with the filter-wide lock
   CAutoLock lock(m_pFilter);
 
@@ -522,16 +519,15 @@ HRESULT CScopeInputPin::Receive(IMediaSample * pSample)
     return hr;
   }
 
-  ReleaseMutex(m_input_mutex);
   // Send the sample to the video window object for rendering
   return m_pFilter->m_Window.Receive(pSample);
 
 } // Receive
 
   //
-  // CScopeWindow Constructor
+  // CMixer Constructor
   //
-CScopeWindow::CScopeWindow(TCHAR *pName, CScopeFilter *pRenderer, HRESULT *phr) :
+CMixer::CMixer(TCHAR *pName, COpenALFilter *pRenderer, HRESULT *phr) :
   m_hInstance(g_hInst),
   m_pRenderer(pRenderer),
   m_nPoints(0),
@@ -546,7 +542,7 @@ CScopeWindow::CScopeWindow(TCHAR *pName, CScopeFilter *pRenderer, HRESULT *phr) 
   //
   // Destructor
   //
-CScopeWindow::~CScopeWindow()
+CMixer::~CMixer()
 {
   // Ensure we stop streaming and release any samples
 
@@ -560,7 +556,7 @@ CScopeWindow::~CScopeWindow()
   //
   // This is called when we start running state
   //
-HRESULT CScopeWindow::StartStreaming()
+HRESULT CMixer::StartStreaming()
 {
   CAutoLock cAutoLock(this);
 
@@ -582,7 +578,7 @@ HRESULT CScopeWindow::StartStreaming()
   //
   // This is called when we stop streaming
   //
-HRESULT CScopeWindow::StopStreaming()
+HRESULT CMixer::StopStreaming()
 {
   CAutoLock cAutoLock(this);
 
@@ -606,7 +602,7 @@ HRESULT CScopeWindow::StopStreaming()
   // of the past waveform.  The "Y" values are normalized to a range of
   // +128 to -127 within the POINT array.
   //
-void CScopeWindow::CopyWaveform(IMediaSample *pMediaSample)
+void CMixer::CopyWaveform(IMediaSample *pMediaSample)
 {
   BYTE *pWave;                // Pointer to image data
   int  nBytes;
@@ -784,7 +780,7 @@ void CScopeWindow::CopyWaveform(IMediaSample *pMediaSample)
   // Called when the input pin receives another sample.
   // Copy the waveform to our circular 1 second buffer
   //
-HRESULT CScopeWindow::Receive(IMediaSample *pSample)
+HRESULT CMixer::Receive(IMediaSample *pSample)
 {
   CheckPointer(pSample, E_POINTER);
   CAutoLock cAutoLock(this);

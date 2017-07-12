@@ -18,7 +18,7 @@ COpenALStream::~COpenALStream(void)
   CloseDevice();
 }
 
-COpenALStream::COpenALStream(CScopeInputPin* inputPin, LPUNKNOWN pUnk, HRESULT * phr)
+COpenALStream::COpenALStream(CAudioInputPin* inputPin, LPUNKNOWN pUnk, HRESULT * phr)
   : CBaseReferenceClock(NAME("OpenAL Stream Clock"), pUnk, phr)
   , m_pCurrentRefClock(0), m_pPrevRefClock(0)
 {
@@ -321,38 +321,38 @@ void COpenALStream::SetVolume(int volume)
     alSourcef(m_source, AL_GAIN, m_volume);
 }
 
-static ALenum CheckALError(const char* desc)
+static ALenum CheckALError(std::wstring desc)
 {
   ALenum err = alGetError();
 
   if (err != AL_NO_ERROR)
   {
-    std::string type;
+    std::wstring type;
 
     switch (err)
     {
     case AL_INVALID_NAME:
-      type = "AL_INVALID_NAME";
+      type = L"AL_INVALID_NAME";
       break;
     case AL_INVALID_ENUM:
-      type = "AL_INVALID_ENUM";
+      type = L"AL_INVALID_ENUM";
       break;
     case AL_INVALID_VALUE:
-      type = "AL_INVALID_VALUE";
+      type = L"AL_INVALID_VALUE";
       break;
     case AL_INVALID_OPERATION:
-      type = "AL_INVALID_OPERATION";
+      type = L"AL_INVALID_OPERATION";
       break;
     case AL_OUT_OF_MEMORY:
-      type = "AL_OUT_OF_MEMORY";
+      type = L"AL_OUT_OF_MEMORY";
       break;
     default:
-      type = "UNKNOWN_ERROR";
+      type = L"UNKNOWN_ERROR";
       break;
     }
 
     wchar_t string_buf[1024] = { 0 };
-    swprintf(string_buf, L"Error %s: %08x %s\n", desc, err, type.c_str());
+    swprintf_s(string_buf, sizeof(string_buf), L"Error %s: %08x %s\n", desc.c_str(), err, type.c_str());
     OutputDebugString(string_buf);
   }
 
@@ -407,11 +407,11 @@ void COpenALStream::SoundLoop()
 
   // Generate some AL Buffers for streaming
   alGenBuffers(OAL_BUFFERS, (ALuint*)m_buffers.data());
-  err = CheckALError("generating buffers");
+  err = CheckALError(L"generating buffers");
 
   // Generate a Source to playback the Buffers
   alGenSources(1, &m_source);
-  err = CheckALError("generating sources");
+  err = CheckALError(L"generating sources");
 
   // Set the default sound volume as saved in the config file.
   alSourcef(m_source, AL_GAIN, m_volume);
@@ -436,30 +436,18 @@ void COpenALStream::SoundLoop()
 
       alDeleteBuffers(OAL_BUFFERS, m_buffers.data());
       alGenBuffers(OAL_BUFFERS, (ALuint*)m_buffers.data());
-      err = CheckALError("re-generating buffers");
+      err = CheckALError(L"re-generating buffers");
 
       next_buffer = 0;
       num_buffers_queued = 0;
 
       // Clean-up queue with old data
-      if (!m_pin_locked)
+      short value = 0;
+      while (m_audio_buffer_queue.unsafe_size() > 0)
       {
-        auto wait_result = WaitForSingleObject(m_pinput_pin->m_input_mutex, INFINITE);
-        if (wait_result == WAIT_OBJECT_0)
-        {
-          m_pin_locked = true;
-          short value = 0;
-          while (m_audio_buffer_queue.unsafe_size() > 0)
-          {
-            m_audio_buffer_queue.try_pop(value);
-          }
-
-          if (ReleaseMutex(m_pinput_pin->m_input_mutex))
-          {
-            m_pin_locked = false;
-          }
-        }
+        m_audio_buffer_queue.try_pop(value);
       }
+      m_audio_buffer_queue.clear();
 
       if (m_latency > 0)
       {
@@ -487,15 +475,6 @@ void COpenALStream::SoundLoop()
     {
       std::this_thread::sleep_for(std::chrono::milliseconds(1));
 
-      // Get the handle and lock the input pin
-      if (!m_pin_locked)
-      {
-        auto wait_result = WaitForSingleObject(m_pinput_pin->m_input_mutex, INFINITE);
-        if (wait_result == WAIT_OBJECT_0)
-        {
-          m_pin_locked = true;
-        }
-      }
       continue;
     }
 
@@ -504,7 +483,7 @@ void COpenALStream::SoundLoop()
     {
       std::array<ALuint, OAL_BUFFERS> unqueued_buffer_ids;
       alSourceUnqueueBuffers(m_source, num_buffers_processed, unqueued_buffer_ids.data());
-      err = CheckALError("unqueuing buffers");
+      err = CheckALError(L"unqueuing buffers");
 
       num_buffers_queued -= num_buffers_processed;
     }
@@ -514,25 +493,15 @@ void COpenALStream::SoundLoop()
 
     size_t min_frames = frames_per_buffer;
 
-    size_t available_samples = 0;
+    ALsizei available_samples = 0;
     if (m_speaker_layout == Surround6)
     {
       if (m_media_type == bit16)
       {
-        available_samples = m_audio_buffer_queue.unsafe_size();
-
+        available_samples = (ALsizei)m_audio_buffer_queue.unsafe_size();
 
         if (available_samples < min_frames * SURROUND_CHANNELS * (num_buffers - num_buffers_queued))
         {
-          // Release the lock if there is not enough samples
-          if (m_pin_locked)
-          {
-            if (ReleaseMutex(m_pinput_pin->m_input_mutex))
-            {
-              m_pin_locked = false;
-            }
-          }
-
           continue;
         }
 
@@ -573,18 +542,10 @@ void COpenALStream::SoundLoop()
     {
       if (m_media_type == bit16)
       {
-        available_samples = m_audio_buffer_queue.unsafe_size();
+        available_samples = (ALsizei)m_audio_buffer_queue.unsafe_size();
 
         if (available_samples < min_frames * STEREO_CHANNELS * (num_buffers - num_buffers_queued))
         {
-          // Release the lock if there is not enough samples
-          if (m_pin_locked)
-          {
-            if (ReleaseMutex(m_pinput_pin->m_input_mutex))
-            {
-              m_pin_locked = false;
-            }
-          }
           continue;
         }
 
@@ -621,10 +582,10 @@ void COpenALStream::SoundLoop()
           available_samples * SIZE_SHORT, m_frequency);
       }
     }
-    err = CheckALError("buffering data");
+    err = CheckALError(L"buffering data");
 
     alSourceQueueBuffers(m_source, 1, &m_buffers[next_buffer]);
-    err = CheckALError("queuing buffers");
+    err = CheckALError(L"queuing buffers");
 
     num_buffers_queued++;
     next_buffer = (next_buffer + 1) % OAL_BUFFERS;
@@ -634,7 +595,7 @@ void COpenALStream::SoundLoop()
     {
       // Buffer underrun occurred, resume playback
       alSourcePlay(m_source);
-      err = CheckALError("occurred resuming playback");
+      err = CheckALError(L"occurred resuming playback");
       OutputDebugString(L"Buffer underrun\n");
     }
   }

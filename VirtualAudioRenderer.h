@@ -12,27 +12,27 @@
 DEFINE_GUID(CLSID_Scope,
   0x35919f40, 0xe904, 0x11ce, 0x8a, 0x3, 0x0, 0xaa, 0x0, 0x6e, 0xcb, 0x65);
 
-class CScopeFilter;
-class CScopeWindow;
+class COpenALFilter;
+class CMixer;
 class COpenALOutput;
 
 // Class supporting the scope input pin
 
-class CScopeInputPin : public CBaseInputPin, public CCritSec
+class CAudioInputPin : public CBaseInputPin, public CCritSec
 {
-  friend class CScopeFilter;
-  friend class CScopeWindow;
+  friend class COpenALFilter;
+  friend class CMixer;
 
 private:
 
-  CScopeFilter *m_pFilter;         // The filter that owns us
+  COpenALFilter *m_pFilter;         // The filter that owns us
 
 public:
 
-  CScopeInputPin(CScopeFilter *pTextOutFilter,
+  CAudioInputPin(COpenALFilter *pTextOutFilter,
     HRESULT *phr,
     LPCWSTR pPinName);
-  ~CScopeInputPin();
+  ~CAudioInputPin();
 
   // Lets us know where a connection ends
   HRESULT BreakConnect();
@@ -53,10 +53,7 @@ public:
   // AddRef it if you are going to hold onto it
   STDMETHODIMP Receive(IMediaSample *pSample);
 
-  // Input lock mutex
-  HANDLE m_input_mutex;
-
-}; // CScopeInputPin
+}; // CAudioInputPin
 
 
    // This class looks after the management of a window. When the class gets
@@ -75,15 +72,15 @@ public:
 
    // These are the video window styles
 
-class CScopeWindow : public CCritSec
+class CMixer : public CCritSec
 {
-  friend class CScopeInputPin;
-  friend class CScopeFilter;
+  friend class CAudioInputPin;
+  friend class COpenALFilter;
 
 private:
 
   HINSTANCE m_hInstance;          // Global module instance handle
-  CScopeFilter *m_pRenderer;      // The owning renderer object
+  COpenALFilter *m_pRenderer;      // The owning renderer object
 
   BOOL m_bStreaming;              // Are we currently streaming
 
@@ -103,8 +100,8 @@ public:
 
   // Constructors and destructors
 
-  CScopeWindow(TCHAR *pName, CScopeFilter *pRenderer, HRESULT *phr);
-  virtual ~CScopeWindow();
+  CMixer(TCHAR *pName, COpenALFilter *pRenderer, HRESULT *phr);
+  virtual ~CMixer();
 
   HRESULT StartStreaming();
   HRESULT StopStreaming();
@@ -112,11 +109,11 @@ public:
   // Called when the input pin receives a sample
   HRESULT Receive(IMediaSample * pIn);
 
-}; // CScopeWindow
+}; // CMixer
 
    // This is the COM object that represents the oscilloscope filter
 
-class CScopeFilter : public CBaseFilter, public CCritSec
+class COpenALFilter : public CBaseFilter, public CCritSec
 {
 
 public:
@@ -126,7 +123,7 @@ public:
   //static CUnknown *CreateInstance(LPUNKNOWN punk, HRESULT *phr);
 
   //  Constructor
-  CScopeFilter(LPUNKNOWN pUnk, HRESULT *phr);
+  COpenALFilter(LPUNKNOWN pUnk, HRESULT *phr);
 
   DECLARE_IUNKNOWN
 
@@ -141,7 +138,7 @@ public:
 
   // Add samples to OpenAL queue
   void PrintOpenALQueueBack();
-  virtual ~CScopeFilter();
+  virtual ~COpenALFilter();
 
   // Return the pins that we support
   int GetPinCount();
@@ -155,12 +152,12 @@ public:
 private:
 
   // The nested classes may access our private state
-  friend class CScopeInputPin;
-  friend class CScopeWindow;
+  friend class CAudioInputPin;
+  friend class CMixer;
   friend class COpenALOutput;
 
-  CScopeInputPin *m_pInputPin;   // Handles pin interfaces
-  CScopeWindow m_Window;         // Looks after the window
+  CAudioInputPin *m_pInputPin;   // Handles pin interfaces
+  CMixer m_Window;         // Looks after the window
   //CCritSec m_Lock;     // Locking
 
-}; // CScopeFilter
+}; // COpenALFilter
