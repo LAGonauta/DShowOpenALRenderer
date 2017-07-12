@@ -202,12 +202,12 @@ STDMETHODIMP COpenALStream::OpenDevice(void)
     return E_FAIL;
   }
 
-  auto s = (char *)alcGetString(nullptr, ALC_ALL_DEVICES_SPECIFIER);
+  //auto s = (char *)alcGetString(nullptr, ALC_ALL_DEVICES_SPECIFIER);
 
   const char* default_device_dame = alcGetString(nullptr, ALC_DEFAULT_DEVICE_SPECIFIER);
   printf_s("Found OpenAL device %s", default_device_dame);
 
-  default_device_dame = s;
+  //default_device_dame = s;
 
   ALCdevice* device = alcOpenDevice(default_device_dame);
   if (!device)

@@ -112,7 +112,7 @@ private:
 
   std::vector<ALuint> m_buffers;
   ALuint m_source = 0;
-  ALfloat m_volume;
+  ALfloat m_volume = 1.0f;
 
   // Get from settings
   uint32_t m_latency = 30;
