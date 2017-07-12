@@ -430,7 +430,7 @@ HRESULT CScopeInputPin::CheckMediaType(const CMediaType *pmt)
     return E_INVALIDARG;
   }
 
-  if (pwfx->wFormatTag != WAVE_FORMAT_PCM)
+  if (pwfx->wFormatTag != WAVE_FORMAT_PCM && pwfx->wFormatTag != WAVE_FORMAT_EXTENSIBLE)
   {
     return E_INVALIDARG;
   }
@@ -622,6 +622,7 @@ void CScopeWindow::CopyWaveform(IMediaSample *pMediaSample)
   nBytes = pMediaSample->GetActualDataLength();
   nSamplesPerChan = nBytes / m_nBlockAlign;
 
+  m_pRenderer->m_openal_device->m_frequency = m_nSamplesPerSec;
   switch (m_nBitsPerSample + m_nChannels)
   {
     BYTE * pb;
@@ -631,6 +632,7 @@ void CScopeWindow::CopyWaveform(IMediaSample *pMediaSample)
   {   // Mono, 8-bit
     m_pRenderer->m_openal_device->m_media_type = m_pRenderer->m_openal_device->bit8;
     m_pRenderer->m_openal_device->m_speaker_layout = m_pRenderer->m_openal_device->Mono;
+
     pb = pWave;
     while (nSamplesPerChan--)
     {
@@ -648,6 +650,9 @@ void CScopeWindow::CopyWaveform(IMediaSample *pMediaSample)
     pb = pWave;
     while (nSamplesPerChan--)
     {
+      m_pRenderer->m_openal_device->m_media_type = m_pRenderer->m_openal_device->bit8;
+      m_pRenderer->m_openal_device->m_speaker_layout = m_pRenderer->m_openal_device->Stereo;
+
       uint8_t value = *pb++;  // Make zero centered
       m_pRenderer->m_openal_device->m_audio_buffer_queue_int8.push(value);
 
@@ -662,6 +667,9 @@ void CScopeWindow::CopyWaveform(IMediaSample *pMediaSample)
 
   case 17:
   { // Mono, 16-bit
+    m_pRenderer->m_openal_device->m_media_type = m_pRenderer->m_openal_device->bit16;
+    m_pRenderer->m_openal_device->m_speaker_layout = m_pRenderer->m_openal_device->Mono;
+
     pw = (WORD *)pWave;
     while (nSamplesPerChan--)
     {
@@ -676,6 +684,9 @@ void CScopeWindow::CopyWaveform(IMediaSample *pMediaSample)
 
   case 18:
   { // Stereo, 16-bit
+    m_pRenderer->m_openal_device->m_media_type = m_pRenderer->m_openal_device->bit16;
+    m_pRenderer->m_openal_device->m_speaker_layout = m_pRenderer->m_openal_device->Stereo;
+
     pw = (WORD *)pWave;
     while (nSamplesPerChan--)
     {
@@ -685,7 +696,73 @@ void CScopeWindow::CopyWaveform(IMediaSample *pMediaSample)
       value = (short)*pw++;
       m_pRenderer->m_openal_device->m_audio_buffer_queue.push(value);
 
-      m_pRenderer->PrintOpenALQueueBack();
+      if (++m_nIndex == m_nSamplesPerSec)
+        m_nIndex = 0;
+    }
+    break;
+  }
+  case 22:
+  { // 5.1 Surround, 16-bit
+    m_pRenderer->m_openal_device->m_media_type = m_pRenderer->m_openal_device->bit16;
+    m_pRenderer->m_openal_device->m_speaker_layout = m_pRenderer->m_openal_device->Surround6;
+
+    pw = (WORD *)pWave;
+    while (nSamplesPerChan--)
+    {
+      int16_t value = (short)*pw++;
+      m_pRenderer->m_openal_device->m_audio_buffer_queue.push(value);
+
+      value = (short)*pw++;
+      m_pRenderer->m_openal_device->m_audio_buffer_queue.push(value);
+
+      value = (short)*pw++;
+      m_pRenderer->m_openal_device->m_audio_buffer_queue.push(value);
+
+      value = (short)*pw++;
+      m_pRenderer->m_openal_device->m_audio_buffer_queue.push(value);
+
+      value = (short)*pw++;
+      m_pRenderer->m_openal_device->m_audio_buffer_queue.push(value);
+
+      value = (short)*pw++;
+      m_pRenderer->m_openal_device->m_audio_buffer_queue.push(value);
+
+      if (++m_nIndex == m_nSamplesPerSec)
+        m_nIndex = 0;
+    }
+    break;
+  }
+  case 24:
+  { // 7.1 Surround, 16-bit
+    m_pRenderer->m_openal_device->m_media_type = m_pRenderer->m_openal_device->bit16;
+    m_pRenderer->m_openal_device->m_speaker_layout = m_pRenderer->m_openal_device->Surround8;
+
+    pw = (WORD *)pWave;
+    while (nSamplesPerChan--)
+    {
+      int16_t value = (short)*pw++;
+      m_pRenderer->m_openal_device->m_audio_buffer_queue.push(value);
+
+      value = (short)*pw++;
+      m_pRenderer->m_openal_device->m_audio_buffer_queue.push(value);
+
+      value = (short)*pw++;
+      m_pRenderer->m_openal_device->m_audio_buffer_queue.push(value);
+
+      value = (short)*pw++;
+      m_pRenderer->m_openal_device->m_audio_buffer_queue.push(value);
+
+      value = (short)*pw++;
+      m_pRenderer->m_openal_device->m_audio_buffer_queue.push(value);
+
+      value = (short)*pw++;
+      m_pRenderer->m_openal_device->m_audio_buffer_queue.push(value);
+
+      value = (short)*pw++;
+      m_pRenderer->m_openal_device->m_audio_buffer_queue.push(value);
+
+      value = (short)*pw++;
+      m_pRenderer->m_openal_device->m_audio_buffer_queue.push(value);
 
       if (++m_nIndex == m_nSamplesPerSec)
         m_nIndex = 0;

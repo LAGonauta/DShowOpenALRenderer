@@ -85,7 +85,7 @@ public:
     Quad,
     Surround6,
     Surround8
-  } m_speaker_layout = Stereo;
+  } m_speaker_layout = Surround6; 
 
   enum MediaType
   {
@@ -95,6 +95,8 @@ public:
     bit32,
     bitfloat
   } m_media_type = bit16;
+
+  uint32_t m_frequency = 48000;
 
 private:
   std::thread m_thread;
@@ -114,7 +116,6 @@ private:
 
   // Get from settings
   uint32_t m_latency = 30;
-  uint32_t m_frequency = 48000;
   bool m_muted = false;
 
   // Clocking variables and functions

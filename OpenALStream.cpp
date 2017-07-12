@@ -202,8 +202,12 @@ STDMETHODIMP COpenALStream::OpenDevice(void)
     return E_FAIL;
   }
 
+  auto s = (char *)alcGetString(nullptr, ALC_ALL_DEVICES_SPECIFIER);
+
   const char* default_device_dame = alcGetString(nullptr, ALC_DEFAULT_DEVICE_SPECIFIER);
   printf_s("Found OpenAL device %s", default_device_dame);
+
+  default_device_dame = s;
 
   ALCdevice* device = alcOpenDevice(default_device_dame);
   if (!device)
@@ -347,7 +351,9 @@ static ALenum CheckALError(const char* desc)
       break;
     }
 
-    printf_s("Error %s: %08x %s", desc, err, type.c_str());
+    wchar_t string_buf[1024] = { 0 };
+    swprintf(string_buf, L"Error %s: %08x %s\n", desc, err, type.c_str());
+    OutputDebugString(string_buf);
   }
 
   return err;
@@ -360,6 +366,10 @@ static bool IsCreativeXFi()
 
 void COpenALStream::SoundLoop()
 {
+  uint32_t past_frequency = m_frequency;
+  SpeakerLayout past_speaker_layout = m_speaker_layout;
+  MediaType past_media_type = m_media_type;
+
   bool float32_capable = alIsExtensionPresent("AL_EXT_float32") != 0;
   bool surround_capable = alIsExtensionPresent("AL_EXT_MCFORMATS") || IsCreativeXFi();
 
@@ -413,8 +423,63 @@ void COpenALStream::SoundLoop()
   unsigned int num_buffers_queued = 0;
   ALint state = 0;
 
+  std::array<int16_t, OAL_MAX_FRAMES * SURROUND_CHANNELS> short_data;
+
   while (m_run_thread)
   {
+    // Check if stream changed frequency, bitness or channel setup
+    if (past_frequency != m_frequency || past_media_type != m_media_type || past_speaker_layout != m_speaker_layout)
+    {
+      // Stop source and clean-up buffers
+      alSourceStop(m_source);
+      alSourcei(m_source, AL_BUFFER, 0);
+
+      alDeleteBuffers(OAL_BUFFERS, m_buffers.data());
+      alGenBuffers(OAL_BUFFERS, (ALuint*)m_buffers.data());
+      err = CheckALError("re-generating buffers");
+
+      next_buffer = 0;
+      num_buffers_queued = 0;
+
+      // Clean-up queue with old data
+      if (!m_pin_locked)
+      {
+        auto wait_result = WaitForSingleObject(m_pinput_pin->m_input_mutex, INFINITE);
+        if (wait_result == WAIT_OBJECT_0)
+        {
+          m_pin_locked = true;
+          short value = 0;
+          while (m_audio_buffer_queue.unsafe_size() > 0)
+          {
+            m_audio_buffer_queue.try_pop(value);
+          }
+
+          if (ReleaseMutex(m_pinput_pin->m_input_mutex))
+          {
+            m_pin_locked = false;
+          }
+        }
+      }
+
+      if (m_latency > 0)
+      {
+        frames_per_buffer = m_frequency / 1000 * m_latency / OAL_BUFFERS;
+      }
+      else
+      {
+        frames_per_buffer = m_frequency / 1000 * 1 / OAL_BUFFERS;
+      }
+
+      if (frames_per_buffer > OAL_MAX_FRAMES)
+      {
+        frames_per_buffer = OAL_MAX_FRAMES;
+      }
+
+      past_frequency = m_frequency;
+      past_media_type = m_media_type;
+      past_speaker_layout = m_speaker_layout;
+    }
+
     // Block until we have a free buffer
     int num_buffers_processed = 0;
     alGetSourcei(m_source, AL_BUFFERS_PROCESSED, &num_buffers_processed);
@@ -455,84 +520,106 @@ void COpenALStream::SoundLoop()
       if (m_media_type == bit16)
       {
         available_samples = m_audio_buffer_queue.unsafe_size();
-      }
 
-      if (available_samples < min_frames * SURROUND_CHANNELS)
-        continue;
 
-      if (available_samples % 6 != 0)
-      {
-        available_samples = available_samples - available_samples % 6;
-      }
-
-      // Get data from queue
-      std::array<__int16, OAL_MAX_FRAMES> short_data;
-
-      for (size_t i = 0; i < available_samples; ++i)
-      {
-        bool trypop = m_audio_buffer_queue.try_pop(short_data[i]);
-        if (trypop == false)
+        if (available_samples < min_frames * SURROUND_CHANNELS * (num_buffers - num_buffers_queued))
         {
-          short_data[i] = 0;
-        }
-      }
+          // Release the lock if there is not enough samples
+          if (m_pin_locked)
+          {
+            if (ReleaseMutex(m_pinput_pin->m_input_mutex))
+            {
+              m_pin_locked = false;
+            }
+          }
 
-      alBufferData(m_buffers[next_buffer], AL_FORMAT_51CHN16, short_data.data(),
-        available_samples * SIZE_SHORT, m_frequency);
+          continue;
+        }
+
+        // samples that will be buffered by OpenAL
+        available_samples = available_samples / (num_buffers - num_buffers_queued);
+
+        if (available_samples > OAL_MAX_FRAMES * SURROUND_CHANNELS)
+        {
+          available_samples = OAL_MAX_FRAMES * SURROUND_CHANNELS;
+        }
+
+        if (available_samples % 6 != 0)
+        {
+          available_samples = available_samples - available_samples % 6;
+        }
+
+        // Get data from queue
+        for (size_t i = 0; i < available_samples; ++i)
+        {
+          short value = 0;
+          bool trypop = m_audio_buffer_queue.try_pop(value);
+          if (trypop)
+          {
+            short_data[i] = value;
+          }
+          else
+          {
+            OutputDebugString(L"Failed to pop!\n");
+            short_data[i] = 0;
+          }
+        }
+
+        alBufferData(m_buffers[next_buffer], AL_FORMAT_51CHN16, short_data.data(),
+          available_samples * SIZE_SHORT, m_frequency);
+      }
     }
     else
     {
       if (m_media_type == bit16)
       {
         available_samples = m_audio_buffer_queue.unsafe_size();
-      }
 
-      if (available_samples < min_frames * STEREO_CHANNELS * (num_buffers - num_buffers_queued))
-      {
-        // Release the lock if there is not enough samples
-        if (m_pin_locked)
+        if (available_samples < min_frames * STEREO_CHANNELS * (num_buffers - num_buffers_queued))
         {
-          if (ReleaseMutex(m_pinput_pin->m_input_mutex))
+          // Release the lock if there is not enough samples
+          if (m_pin_locked)
           {
-            m_pin_locked = false;
+            if (ReleaseMutex(m_pinput_pin->m_input_mutex))
+            {
+              m_pin_locked = false;
+            }
+          }
+          continue;
+        }
+
+        // samples that will be buffered by OpenAL
+        available_samples = available_samples / (num_buffers - num_buffers_queued);
+
+        if (available_samples > OAL_MAX_FRAMES * STEREO_CHANNELS)
+        {
+          available_samples = OAL_MAX_FRAMES * STEREO_CHANNELS;
+        }
+
+        if (available_samples % STEREO_CHANNELS != 0)
+        {
+          --available_samples;
+        }
+
+        // Get data from queue
+        for (size_t i = 0; i < available_samples; ++i)
+        {
+          short value = 0;
+          bool trypop = m_audio_buffer_queue.try_pop(value);
+          if (trypop)
+          {
+            short_data[i] = value;
+          }
+          else
+          {
+            OutputDebugString(L"Failed to pop!\n");
+            short_data[i] = 0;
           }
         }
-        continue;
+
+        alBufferData(m_buffers[next_buffer], AL_FORMAT_STEREO16, short_data.data(),
+          available_samples * SIZE_SHORT, m_frequency);
       }
-
-      // samples that will be buffered by OpenAL
-      available_samples = available_samples / (num_buffers - num_buffers_queued);
-
-      if (available_samples > OAL_MAX_FRAMES * STEREO_CHANNELS)
-      {
-        available_samples = OAL_MAX_FRAMES * STEREO_CHANNELS;
-      }
-
-      if (available_samples % STEREO_CHANNELS != 0)
-      {
-        --available_samples;
-      }
-
-      // Get data from queue
-      std::array<__int16, OAL_MAX_FRAMES * STEREO_CHANNELS> short_data;
-
-      for (size_t i = 0; i < available_samples; ++i)
-      {
-        short value = 0;
-        bool trypop = m_audio_buffer_queue.try_pop(value);
-        if (trypop)
-        {
-          short_data[i] = value;
-        }
-        else
-        {
-          OutputDebugString(L"Failed to pop! \n");
-          short_data[i] = 0;
-        }
-      }
-
-      alBufferData(m_buffers[next_buffer], AL_FORMAT_STEREO16, short_data.data(),
-        available_samples * SIZE_SHORT, m_frequency);
     }
     err = CheckALError("buffering data");
 
@@ -548,7 +635,7 @@ void COpenALStream::SoundLoop()
       // Buffer underrun occurred, resume playback
       alSourcePlay(m_source);
       err = CheckALError("occurred resuming playback");
-      OutputDebugString(L"Buffer under-flow\n");
+      OutputDebugString(L"Buffer underrun\n");
     }
   }
 }
