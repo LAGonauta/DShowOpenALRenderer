@@ -52,6 +52,24 @@ class COpenALStream final : public CBaseReferenceClock
   friend class CMixer;
 
 public:
+  enum SpeakerLayout
+  {
+    Mono,
+    Stereo,
+    Quad,
+    Surround6,
+    Surround8
+  };
+
+  enum MediaBitness
+  {
+    bit8,
+    bit16,
+    bit24,
+    bit32,
+    bitfloat
+  };
+
   ~COpenALStream();
   COpenALStream(CMixer* audioMixer, LPUNKNOWN pUnk, HRESULT *phr);
 
@@ -72,24 +90,14 @@ public:
   STDMETHODIMP CloseDevice();
   STDMETHODIMP StartDevice();
   STDMETHODIMP StopDevice();
-
-  enum SpeakerLayout
-  {
-    Mono,
-    Stereo,
-    Quad,
-    Surround6,
-    Surround8
-  } m_speaker_layout = Surround6; 
-
-  enum MediaType
-  {
-    bit8,
-    bit16,
-    bit24,
-    bit32,
-    bitfloat
-  } m_media_type = bit16;
+  HRESULT Pause();
+  HRESULT Stop();
+  HRESULT setSpeakerLayout(SpeakerLayout layout);
+  SpeakerLayout getSpeakerLayout();
+  HRESULT setFrequency(uint32_t frequency);
+  uint32_t getFrequency();
+  HRESULT setBitness(MediaBitness bitness);
+  MediaBitness getBitness();
 
   uint32_t m_frequency = 48000;
 
@@ -100,7 +108,7 @@ private:
 
   void SoundLoop();
   void SetVolume(int volume);
-  void Stop();
+  void Destroy();
 
   uint32_t num_buffers = 3;
 
@@ -109,6 +117,8 @@ private:
   ALfloat m_volume = 1.0f;
 
   CMixer* m_mixer;
+  SpeakerLayout m_speaker_layout = Surround6;
+  MediaBitness m_bitness = bit16;
 
   // Get from settings
   uint32_t m_latency = 30;

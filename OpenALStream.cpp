@@ -231,7 +231,7 @@ STDMETHODIMP COpenALStream::OpenDevice(void)
 STDMETHODIMP COpenALStream::CloseDevice(void)
 {
   StopDevice();
-  Stop();
+  Destroy();
 
   return S_OK;
 }
@@ -258,7 +258,7 @@ STDMETHODIMP COpenALStream::StopDevice(void)
   return S_OK;
 }
 
-void COpenALStream::Stop()
+void COpenALStream::Destroy()
 {
   alSourceStop(m_source);
   alSourcei(m_source, AL_BUFFER, 0);
@@ -274,6 +274,63 @@ void COpenALStream::Stop()
   alcMakeContextCurrent(nullptr);
   alcDestroyContext(context);
   alcCloseDevice(device);
+}
+
+STDMETHODIMP COpenALStream::Pause()
+{
+  ALint state = 0;
+  alGetSourcei(m_source, AL_SOURCE_STATE, &state);
+  if (state == AL_PAUSED)
+  {
+    return S_OK;
+  }
+  else if (state == AL_PLAYING)
+  {
+    alSourcePause(m_source);
+    return S_OK;
+  }
+
+  return E_FAIL;
+}
+
+STDMETHODIMP COpenALStream::Stop()
+{
+  alSourceStop(m_source);
+
+  return S_OK;
+}
+
+HRESULT COpenALStream::setSpeakerLayout(SpeakerLayout layout)
+{
+  m_speaker_layout = layout;
+  return S_OK;
+}
+
+COpenALStream::SpeakerLayout COpenALStream::getSpeakerLayout()
+{
+  return m_speaker_layout;
+}
+
+HRESULT COpenALStream::setFrequency(uint32_t frequency)
+{
+  m_frequency = frequency;
+  return S_OK;
+}
+
+uint32_t COpenALStream::getFrequency()
+{
+  return m_frequency;
+}
+
+HRESULT COpenALStream::setBitness(MediaBitness bitness)
+{
+  m_bitness = bitness;
+  return S_OK;
+}
+
+COpenALStream::MediaBitness COpenALStream::getBitness()
+{
+  return m_bitness;
 }
 
 DWORD COpenALStream::MetGetTime(void)
@@ -368,7 +425,7 @@ void COpenALStream::SoundLoop()
 {
   uint32_t past_frequency = m_frequency;
   SpeakerLayout past_speaker_layout = m_speaker_layout;
-  MediaType past_media_type = m_media_type;
+  MediaBitness past_bitness = m_bitness;
 
   bool float32_capable = alIsExtensionPresent("AL_EXT_float32") != 0;
   bool surround_capable = alIsExtensionPresent("AL_EXT_MCFORMATS") || IsCreativeXFi();
@@ -427,110 +484,117 @@ void COpenALStream::SoundLoop()
 
   while (m_run_thread)
   {
-    // Check if stream changed frequency, bitness or channel setup
-    if (past_frequency != m_frequency || past_media_type != m_media_type || past_speaker_layout != m_speaker_layout)
+    if (m_mixer->IsStreaming())
     {
-      // Stop source and clean-up buffers
-      alSourceStop(m_source);
-      alSourcei(m_source, AL_BUFFER, 0);
-
-      alDeleteBuffers(OAL_BUFFERS, m_buffers.data());
-      alGenBuffers(OAL_BUFFERS, (ALuint*)m_buffers.data());
-      err = CheckALError(L"re-generating buffers");
-
-      next_buffer = 0;
-      num_buffers_queued = 0;
-
-      if (m_latency > 0)
+      // Check if stream changed frequency, bitness or channel setup
+      if (past_frequency != m_frequency || past_bitness != m_bitness || past_speaker_layout != m_speaker_layout)
       {
-        frames_per_buffer = m_frequency / 1000 * m_latency / OAL_BUFFERS;
+        // Stop source and clean-up buffers
+        alSourceStop(m_source);
+        alSourcei(m_source, AL_BUFFER, 0);
+
+        alDeleteBuffers(OAL_BUFFERS, m_buffers.data());
+        alGenBuffers(OAL_BUFFERS, (ALuint*)m_buffers.data());
+        err = CheckALError(L"re-generating buffers");
+
+        next_buffer = 0;
+        num_buffers_queued = 0;
+
+        if (m_latency > 0)
+        {
+          frames_per_buffer = m_frequency / 1000 * m_latency / OAL_BUFFERS;
+        }
+        else
+        {
+          frames_per_buffer = m_frequency / 1000 * 1 / OAL_BUFFERS;
+        }
+
+        if (frames_per_buffer > OAL_MAX_FRAMES)
+        {
+          frames_per_buffer = OAL_MAX_FRAMES;
+        }
+
+        past_frequency = m_frequency;
+        past_bitness = m_bitness;
+        past_speaker_layout = m_speaker_layout;
+      }
+
+      // Block until we have a free buffer
+      int num_buffers_processed = 0;
+      alGetSourcei(m_source, AL_BUFFERS_PROCESSED, &num_buffers_processed);
+      alGetSourcei(m_source, AL_SOURCE_STATE, &state);
+      if ((num_buffers_queued == OAL_BUFFERS && !num_buffers_processed) || state == AL_PAUSED)
+      {
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        continue;
+      }
+
+      // Remove the Buffer from the Queue.
+      if (num_buffers_processed)
+      {
+        std::array<ALuint, OAL_BUFFERS> unqueued_buffer_ids;
+        alSourceUnqueueBuffers(m_source, num_buffers_processed, unqueued_buffer_ids.data());
+        err = CheckALError(L"unqueuing buffers");
+
+        num_buffers_queued -= num_buffers_processed;
+      }
+
+      // Control clock
+      //ClockController();
+
+      size_t min_frames = 64;
+
+      size_t available_frames = 0;
+      if (m_speaker_layout == Surround6)
+      {
+        if (m_bitness == bit16)
+        {
+          available_frames = m_mixer->MixShort(&short_data, frames_per_buffer);
+
+          if (available_frames < min_frames)
+          {
+            continue;
+          }
+
+          alBufferData(m_buffers[next_buffer], AL_FORMAT_51CHN16, short_data.data(),
+            static_cast<ALsizei>(available_frames) * FRAME_SURROUND_SHORT, m_frequency);
+        }
       }
       else
       {
-        frames_per_buffer = m_frequency / 1000 * 1 / OAL_BUFFERS;
-      }
-
-      if (frames_per_buffer > OAL_MAX_FRAMES)
-      {
-        frames_per_buffer = OAL_MAX_FRAMES;
-      }
-
-      past_frequency = m_frequency;
-      past_media_type = m_media_type;
-      past_speaker_layout = m_speaker_layout;
-    }
-
-    // Block until we have a free buffer
-    int num_buffers_processed = 0;
-    alGetSourcei(m_source, AL_BUFFERS_PROCESSED, &num_buffers_processed);
-    alGetSourcei(m_source, AL_SOURCE_STATE, &state);
-    if ((num_buffers_queued == OAL_BUFFERS && !num_buffers_processed) || state == AL_PAUSED)
-    {
-      std::this_thread::sleep_for(std::chrono::milliseconds(1));
-      continue;
-    }
-
-    // Remove the Buffer from the Queue.
-    if (num_buffers_processed)
-    {
-      std::array<ALuint, OAL_BUFFERS> unqueued_buffer_ids;
-      alSourceUnqueueBuffers(m_source, num_buffers_processed, unqueued_buffer_ids.data());
-      err = CheckALError(L"unqueuing buffers");
-
-      num_buffers_queued -= num_buffers_processed;
-    }
-
-    // Control clock
-    //ClockController();
-
-    size_t min_frames = 64;
-
-    size_t available_frames = 0;
-    if (m_speaker_layout == Surround6)
-    {
-      if (m_media_type == bit16)
-      {
-        available_frames = m_mixer->MixShort(&short_data, frames_per_buffer);
-
-        if (available_frames < min_frames)
+        if (m_bitness == bit16)
         {
-          continue;
-        }
+          available_frames = m_mixer->MixShort(&short_data, frames_per_buffer);
 
-        alBufferData(m_buffers[next_buffer], AL_FORMAT_51CHN16, short_data.data(),
-          static_cast<ALsizei>(available_frames) * FRAME_SURROUND_SHORT, m_frequency);
+          if (!available_frames)
+          {
+            continue;
+          }
+
+          alBufferData(m_buffers[next_buffer], AL_FORMAT_STEREO16, short_data.data(),
+            static_cast<ALsizei>(available_frames) * FRAME_STEREO_SHORT, m_frequency);
+        }
+      }
+      err = CheckALError(L"buffering data");
+
+      alSourceQueueBuffers(m_source, 1, &m_buffers[next_buffer]);
+      err = CheckALError(L"queuing buffers");
+
+      num_buffers_queued++;
+      next_buffer = (next_buffer + 1) % OAL_BUFFERS;
+
+      alGetSourcei(m_source, AL_SOURCE_STATE, &state);
+      if (state != AL_PLAYING)
+      {
+        // Buffer underrun occurred, resume playback
+        alSourcePlay(m_source);
+        err = CheckALError(L"occurred resuming playback");
+        OutputDebugString(L"Buffer underrun\n");
       }
     }
     else
     {
-      if (m_media_type == bit16)
-      {
-        available_frames = m_mixer->MixShort(&short_data, frames_per_buffer);
-
-        if (!available_frames)
-        {
-          continue;
-        }
-
-        alBufferData(m_buffers[next_buffer], AL_FORMAT_STEREO16, short_data.data(),
-                     static_cast<ALsizei>(available_frames) * FRAME_STEREO_SHORT, m_frequency);
-      }
-    }
-    err = CheckALError(L"buffering data");
-
-    alSourceQueueBuffers(m_source, 1, &m_buffers[next_buffer]);
-    err = CheckALError(L"queuing buffers");
-
-    num_buffers_queued++;
-    next_buffer = (next_buffer + 1) % OAL_BUFFERS;
-
-    alGetSourcei(m_source, AL_SOURCE_STATE, &state);
-    if (state != AL_PLAYING)
-    {
-      // Buffer underrun occurred, resume playback
-      alSourcePlay(m_source);
-      err = CheckALError(L"occurred resuming playback");
-      OutputDebugString(L"Buffer underrun\n");
+      std::this_thread::sleep_for(std::chrono::milliseconds(30));
     }
   }
 }

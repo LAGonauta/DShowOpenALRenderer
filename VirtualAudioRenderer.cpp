@@ -270,6 +270,8 @@ STDMETHODIMP COpenALFilter::Stop()
       {
         return hr;
       }
+
+      m_openal_device->Stop();
     }
 
     DbgLog((LOG_TRACE, 1, TEXT("Stopping....")));
@@ -304,14 +306,14 @@ STDMETHODIMP COpenALFilter::Pause()
   if (m_State == State_Running)
   {
     m_Window.StopStreaming();
-    //m_openal_device->StopDevice();
+    m_openal_device->Pause();
   }
 
   // tell the pin to go inactive and change state
 
   if (m_State == State_Stopped)
   {
-    m_openal_device->StartDevice();
+    m_openal_device->Pause();
   }
 
   return CBaseFilter::Pause();
@@ -341,6 +343,7 @@ STDMETHODIMP COpenALFilter::Run(REFERENCE_TIME tStart)
   if (fsOld != State_Running)
   {
     m_Window.StartStreaming();
+    m_openal_device->StartDevice();
   }
 
   return NOERROR;
@@ -600,6 +603,11 @@ HRESULT CMixer::StopStreaming()
 
 } // StopStreaming
 
+HRESULT CMixer::IsStreaming()
+{
+  return m_bStreaming;
+}
+
   //
   // CopyWaveform
   //
@@ -634,8 +642,8 @@ void CMixer::CopyWaveform(IMediaSample *pMediaSample)
 
   case 9:
   {   // Mono, 8-bit
-    m_pRenderer->m_openal_device->m_media_type = m_pRenderer->m_openal_device->bit8;
-    m_pRenderer->m_openal_device->m_speaker_layout = m_pRenderer->m_openal_device->Mono;
+    m_pRenderer->m_openal_device->setBitness(m_pRenderer->m_openal_device->bit8);
+    m_pRenderer->m_openal_device->setSpeakerLayout(m_pRenderer->m_openal_device->Mono);
 
     pb = pWave;
     while (nSamplesPerChan--)
@@ -655,8 +663,8 @@ void CMixer::CopyWaveform(IMediaSample *pMediaSample)
     pb = pWave;
     while (nSamplesPerChan--)
     {
-      m_pRenderer->m_openal_device->m_media_type = m_pRenderer->m_openal_device->bit8;
-      m_pRenderer->m_openal_device->m_speaker_layout = m_pRenderer->m_openal_device->Stereo;
+      m_pRenderer->m_openal_device->setBitness(m_pRenderer->m_openal_device->bit8);
+      m_pRenderer->m_openal_device->setSpeakerLayout(m_pRenderer->m_openal_device->Stereo);
 
       uint8_t value = *pb++;  // Make zero centered
       m_sample_queue_8bit.push(value);
@@ -674,8 +682,8 @@ void CMixer::CopyWaveform(IMediaSample *pMediaSample)
 
   case 17:
   { // Mono, 16-bit
-    m_pRenderer->m_openal_device->m_media_type = m_pRenderer->m_openal_device->bit16;
-    m_pRenderer->m_openal_device->m_speaker_layout = m_pRenderer->m_openal_device->Mono;
+    m_pRenderer->m_openal_device->setBitness(m_pRenderer->m_openal_device->bit16);
+    m_pRenderer->m_openal_device->setSpeakerLayout(m_pRenderer->m_openal_device->Mono);
 
     pw = (WORD *)pWave;
     while (nSamplesPerChan--)
@@ -692,8 +700,8 @@ void CMixer::CopyWaveform(IMediaSample *pMediaSample)
 
   case 18:
   { // Stereo, 16-bit
-    m_pRenderer->m_openal_device->m_media_type = m_pRenderer->m_openal_device->bit16;
-    m_pRenderer->m_openal_device->m_speaker_layout = m_pRenderer->m_openal_device->Stereo;
+    m_pRenderer->m_openal_device->setBitness(m_pRenderer->m_openal_device->bit16);
+    m_pRenderer->m_openal_device->setSpeakerLayout(m_pRenderer->m_openal_device->Stereo);
 
     pw = (WORD *)pWave;
     while (nSamplesPerChan--)
@@ -713,8 +721,8 @@ void CMixer::CopyWaveform(IMediaSample *pMediaSample)
   }
   case 22:
   { // 5.1 Surround, 16-bit
-    m_pRenderer->m_openal_device->m_media_type = m_pRenderer->m_openal_device->bit16;
-    m_pRenderer->m_openal_device->m_speaker_layout = m_pRenderer->m_openal_device->Surround6;
+    m_pRenderer->m_openal_device->setBitness(m_pRenderer->m_openal_device->bit16);
+    m_pRenderer->m_openal_device->setSpeakerLayout(m_pRenderer->m_openal_device->Surround6);
 
     pw = (WORD *)pWave;
     while (nSamplesPerChan--)
@@ -750,8 +758,8 @@ void CMixer::CopyWaveform(IMediaSample *pMediaSample)
   }
   case 24:
   { // 7.1 Surround, 16-bit
-    m_pRenderer->m_openal_device->m_media_type = m_pRenderer->m_openal_device->bit16;
-    m_pRenderer->m_openal_device->m_speaker_layout = m_pRenderer->m_openal_device->Surround8;
+    m_pRenderer->m_openal_device->setBitness(m_pRenderer->m_openal_device->bit16);
+    m_pRenderer->m_openal_device->setSpeakerLayout(m_pRenderer->m_openal_device->Surround8);
 
     pw = (WORD *)pWave;
     while (nSamplesPerChan--)
