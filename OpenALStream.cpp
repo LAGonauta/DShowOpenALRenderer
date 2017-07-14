@@ -11,7 +11,7 @@
 #include <array>
 
 #include "OpenALStream.h"
-#include "VirtualAudioRenderer.h"
+#include "OpenALAudioRenderer.h"
 
 COpenALStream::~COpenALStream(void)
 {
@@ -276,7 +276,7 @@ void COpenALStream::Destroy()
   alcCloseDevice(device);
 }
 
-STDMETHODIMP COpenALStream::Pause()
+HRESULT COpenALStream::Pause()
 {
   ALint state = 0;
   alGetSourcei(m_source, AL_SOURCE_STATE, &state);
@@ -293,7 +293,7 @@ STDMETHODIMP COpenALStream::Pause()
   return E_FAIL;
 }
 
-STDMETHODIMP COpenALStream::Stop()
+HRESULT COpenALStream::Stop()
 {
   alSourceStop(m_source);
 

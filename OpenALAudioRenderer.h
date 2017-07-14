@@ -116,7 +116,7 @@ public:
 
   HRESULT StartStreaming();
   HRESULT StopStreaming();
-  HRESULT IsStreaming();
+  bool IsStreaming();
 
   // Called when the input pin receives a sample
   HRESULT Receive(IMediaSample* pIn);

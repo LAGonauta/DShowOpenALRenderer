@@ -1,4 +1,4 @@
-LIBRARY VirtualAudioRenderer.dll
+LIBRARY OpenALAudioRenderer.dll
 
 EXPORTS
 	DllCanUnloadNow		PRIVATE

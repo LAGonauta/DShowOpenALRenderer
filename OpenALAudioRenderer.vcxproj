@@ -20,8 +20,9 @@
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <ProjectGuid>{0246D7DA-058C-43C6-AAE6-B2B87B0EDB01}</ProjectGuid>
-    <RootNamespace>VirtualAudioRenderer</RootNamespace>
+    <RootNamespace>OpenALAudioRenderer</RootNamespace>
     <WindowsTargetPlatformVersion>8.1</WindowsTargetPlatformVersion>
+    <ProjectName>OpenALAudioRenderer</ProjectName>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
@@ -90,7 +91,7 @@
       <MinimalRebuild />
     </ClCompile>
     <Link>
-      <ModuleDefinitionFile>VirtualAudioRenderer.def</ModuleDefinitionFile>
+      <ModuleDefinitionFile>OpenALAudioRenderer.def</ModuleDefinitionFile>
       <AdditionalDependencies>Winmm.lib;strmiids.lib;atls.lib;mfc140d.lib;ucrtd.lib;vcruntimed.lib;msvcrtd.lib;comsupp.lib;kernel32.lib;user32.lib;gdi32.lib;winspool.lib;comdlg32.lib;advapi32.lib;shell32.lib;ole32.lib;oleaut32.lib;uuid.lib;odbc32.lib;odbccp32.lib;OpenAL32.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <IgnoreAllDefaultLibraries>
       </IgnoreAllDefaultLibraries>
@@ -109,7 +110,7 @@
       <MinimalRebuild />
     </ClCompile>
     <Link>
-      <ModuleDefinitionFile>VirtualAudioRenderer.def</ModuleDefinitionFile>
+      <ModuleDefinitionFile>OpenALAudioRenderer.def</ModuleDefinitionFile>
       <AdditionalDependencies>Winmm.lib;strmiids.lib;atls.lib;mfc140d.lib;ucrtd.lib;vcruntimed.lib;msvcrtd.lib;chkstk.obj;comsupp.lib;kernel32.lib;user32.lib;gdi32.lib;winspool.lib;comdlg32.lib;advapi32.lib;shell32.lib;ole32.lib;oleaut32.lib;uuid.lib;odbc32.lib;odbccp32.lib;OpenAL32.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <IgnoreAllDefaultLibraries>
       </IgnoreAllDefaultLibraries>
@@ -129,7 +130,7 @@
     <Link>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
-      <ModuleDefinitionFile>VirtualAudioRenderer.def</ModuleDefinitionFile>
+      <ModuleDefinitionFile>OpenALAudioRenderer.def</ModuleDefinitionFile>
       <AdditionalDependencies>Winmm.lib;strmiids.lib;atls.lib;mfc140.lib;ucrt.lib;vcruntime.lib;comsupp.lib;msvcrt.lib;kernel32.lib;user32.lib;gdi32.lib;winspool.lib;comdlg32.lib;advapi32.lib;shell32.lib;ole32.lib;oleaut32.lib;uuid.lib;odbc32.lib;odbccp32.lib;OpenAL32.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <IgnoreAllDefaultLibraries>false</IgnoreAllDefaultLibraries>
       <SubSystem>Windows</SubSystem>
@@ -148,7 +149,7 @@
     <Link>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
-      <ModuleDefinitionFile>VirtualAudioRenderer.def</ModuleDefinitionFile>
+      <ModuleDefinitionFile>OpenALAudioRenderer.def</ModuleDefinitionFile>
       <AdditionalDependencies>Winmm.lib;strmiids.lib;atls.lib;mfc140.lib;ucrt.lib;vcruntime.lib;comsupp.lib;msvcrt.lib;kernel32.lib;user32.lib;gdi32.lib;winspool.lib;comdlg32.lib;advapi32.lib;shell32.lib;ole32.lib;oleaut32.lib;uuid.lib;odbc32.lib;odbccp32.lib;OpenAL32.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <IgnoreAllDefaultLibraries>false</IgnoreAllDefaultLibraries>
       <SubSystem>Windows</SubSystem>
@@ -186,6 +187,7 @@
     <ClInclude Include="refclock.h" />
     <ClInclude Include="reftime.h" />
     <ClInclude Include="renbase.h" />
+    <ClInclude Include="resource.h" />
     <ClInclude Include="schedule.h" />
     <ClInclude Include="seekpt.h" />
     <ClInclude Include="source.h" />
@@ -195,7 +197,7 @@
     <ClInclude Include="transfrm.h" />
     <ClInclude Include="transip.h" />
     <ClInclude Include="videoctl.h" />
-    <ClInclude Include="VirtualAudioRenderer.h" />
+    <ClInclude Include="OpenALAudioRenderer.h" />
     <ClInclude Include="vtrans.h" />
     <ClInclude Include="winctrl.h" />
     <ClInclude Include="winutil.h" />
@@ -230,7 +232,7 @@
     <ClCompile Include="transfrm.cpp" />
     <ClCompile Include="transip.cpp" />
     <ClCompile Include="videoctl.cpp" />
-    <ClCompile Include="VirtualAudioRenderer.cpp" />
+    <ClCompile Include="OpenALAudioRenderer.cpp" />
     <ClCompile Include="vtrans.cpp" />
     <ClCompile Include="winctrl.cpp" />
     <ClCompile Include="winutil.cpp" />
@@ -240,7 +242,10 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="README.md" />
-    <None Include="VirtualAudioRenderer.def" />
+    <None Include="OpenALAudioRenderer.def" />
+  </ItemGroup>
+  <ItemGroup>
+    <ResourceCompile Include="OpenALAudioRenderer.rc" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

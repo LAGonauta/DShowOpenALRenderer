@@ -10,61 +10,12 @@
 // Copyright (c) Microsoft Corporation.  All rights reserved.
 //------------------------------------------------------------------------------
 
-
-//
-// Summary
-//
-// This is an audio oscilloscope renderer - we are basically an audio renderer.
-// When we are created we also create a class to handle the scope window
-// whose constructor creates a worker thread; when it is destroyed it will
-// also terminate the worker thread. On that worker thread a window is handled
-// that shows the audio waveform for data sent to us. The data is kept
-// in a circular buffer that loops when sufficient data has been received.
-// We support a number of different audio formats such as 8-bit mode and stereo.
-//
-//
-// Demonstration Instructions
-//
-// (To really sure of this demonstration the machine must have a sound card)
-//
-// Start GraphEdit, which is available in the SDK DXUtils folder. Drag and drop
-// an MPEG, AVI or MOV file into the tool and it will be rendered. Then go to
-// the filters in the graph and find the filter (box) titled "Audio Renderer"
-// This is the filter we will be replacing with this oscilloscope renderer.
-// Then click on the box and hit DELETE. After that go to the Graph menu and
-// select "Insert Filters", from the dialog box that pops up find and select
-// "Oscilloscope", then dismiss the dialog. Back in the graph layout find the
-// output pin of the filter that was connected to the input of the audio
-// renderer you just deleted, right click and select "Render". You should
-// see it being connected to the input pin of the oscilloscope you inserted
-//
-// Click Run on GraphEdit and you'll see a waveform for the audio soundtrack...
-//
-//
-// Files
-//
-// resource.h           Microsoft Visual C++ generated file
-// scope.cpp            The main filter and window implementations
-// scope.def            What APIs the DLL imports and exports
-// scope.h              Window and filter class definitions
-// scope.mak            Visual C++ generated makefile
-// scope.rc             Dialog box template for our window
-//
-//
-// Base classes we use
-//
-// CBaseInputPin        A generic input pin we use for the filter
-// CCritSec             A wrapper class around a critical section
-// CBaseFilter          The generic DirectShow filter object
-//
-//
-
 #include <streams.h>
 #include <commctrl.h>
 #include <mmsystem.h>
 #include <initguid.h>
 #include <wxdebug.h>
-#include "VirtualAudioRenderer.h"
+#include "OpenALAudioRenderer.h"
 #include "OpenALStream.h"
 #include <strsafe.h>
 
@@ -111,8 +62,6 @@ CFactoryTemplate g_Templates[] = {
 };
 int g_cTemplates = sizeof(g_Templates) / sizeof(g_Templates[0]);
 
-
-
 //
 // CreateInstance
 //
@@ -123,7 +72,6 @@ CUnknown * WINAPI COpenALFilter::CreateInstance(LPUNKNOWN pUnk, HRESULT *phr)
   return new COpenALFilter(pUnk, phr);
 
 } // CreateInstance
-
 
   //
   // Constructor
@@ -610,7 +558,7 @@ HRESULT CMixer::StopStreaming()
 
 } // StopStreaming
 
-HRESULT CMixer::IsStreaming()
+bool CMixer::IsStreaming()
 {
   return m_bStreaming;
 }
