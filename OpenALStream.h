@@ -99,8 +99,6 @@ public:
   HRESULT setBitness(MediaBitness bitness);
   MediaBitness getBitness();
 
-  uint32_t m_frequency = 48000;
-
 private:
   std::thread m_thread;
   bool m_pin_locked = false;
@@ -119,6 +117,7 @@ private:
   CMixer* m_mixer;
   SpeakerLayout m_speaker_layout = Surround6;
   MediaBitness m_bitness = bit16;
+  uint32_t m_frequency = 48000;
 
   // Get from settings
   uint32_t m_latency = 30;

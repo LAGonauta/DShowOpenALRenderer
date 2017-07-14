@@ -169,7 +169,6 @@ private:
   friend class COpenALOutput;
 
   CAudioInputPin *m_pInputPin;   // Handles pin interfaces
-  CMixer m_Window;         // Looks after the window
-  //CCritSec m_Lock;     // Locking
+  CMixer m_mixer;         // Looks after the window
 
 }; // COpenALFilter

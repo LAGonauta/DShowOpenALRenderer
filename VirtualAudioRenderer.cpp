@@ -151,7 +151,7 @@ void COpenALFilter::PrintOpenALQueueBack()
 
 COpenALFilter::COpenALFilter(LPUNKNOWN pUnk, HRESULT *phr) :
   CBaseFilter(NAME("OpenAL Renderer"), pUnk, (CCritSec *) this, CLSID_OALRend),
-  m_Window(NAME("OpenAL Renderer"), this, phr)
+  m_mixer(NAME("OpenAL Renderer"), this, phr)
 {
   ASSERT(phr);
 
@@ -163,7 +163,7 @@ COpenALFilter::COpenALFilter(LPUNKNOWN pUnk, HRESULT *phr) :
       *phr = E_OUTOFMEMORY;
   }
 
-  m_openal_device = new COpenALStream(&m_Window, static_cast<IBaseFilter*>(this), phr);
+  m_openal_device = new COpenALStream(&m_mixer, static_cast<IBaseFilter*>(this), phr);
 
 } // (Constructor)
 
@@ -270,8 +270,6 @@ STDMETHODIMP COpenALFilter::Stop()
       {
         return hr;
       }
-
-      m_openal_device->Stop();
     }
 
     DbgLog((LOG_TRACE, 1, TEXT("Stopping....")));
@@ -305,16 +303,10 @@ STDMETHODIMP COpenALFilter::Pause()
 
   if (m_State == State_Running)
   {
-    m_Window.StopStreaming();
-    m_openal_device->Pause();
+    m_mixer.StopStreaming();
   }
 
   // tell the pin to go inactive and change state
-
-  if (m_State == State_Stopped)
-  {
-    m_openal_device->Pause();
-  }
 
   return CBaseFilter::Pause();
 
@@ -342,7 +334,7 @@ STDMETHODIMP COpenALFilter::Run(REFERENCE_TIME tStart)
   
   if (fsOld != State_Running)
   {
-    m_Window.StartStreaming();
+    m_mixer.StartStreaming();
     m_openal_device->StartDevice();
   }
 
@@ -460,13 +452,13 @@ HRESULT CAudioInputPin::SetMediaType(const CMediaType *pmt)
   {
     WAVEFORMATEX *pwf = (WAVEFORMATEX *)pmt->Format();
 
-    m_pFilter->m_Window.m_nChannels = pwf->nChannels;
-    m_pFilter->m_Window.m_nSamplesPerSec = pwf->nSamplesPerSec;
-    m_pFilter->m_Window.m_nBitsPerSample = pwf->wBitsPerSample;
-    m_pFilter->m_Window.m_nBlockAlign = pwf->nBlockAlign;
+    m_pFilter->m_mixer.m_nChannels = pwf->nChannels;
+    m_pFilter->m_mixer.m_nSamplesPerSec = pwf->nSamplesPerSec;
+    m_pFilter->m_mixer.m_nBitsPerSample = pwf->wBitsPerSample;
+    m_pFilter->m_mixer.m_nBlockAlign = pwf->nBlockAlign;
 
-    m_pFilter->m_Window.m_MaxValue = 128;
-    m_pFilter->m_Window.m_nIndex = 0;
+    m_pFilter->m_mixer.m_MaxValue = 128;
+    m_pFilter->m_mixer.m_nIndex = 0;
 
   }
 
@@ -524,7 +516,7 @@ HRESULT CAudioInputPin::Receive(IMediaSample * pSample)
   }
 
   // Send the sample to the video window object for rendering
-  return m_pFilter->m_Window.Receive(pSample);
+  return m_pFilter->m_mixer.Receive(pSample);
 
 } // Receive
 
