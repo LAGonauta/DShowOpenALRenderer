@@ -6,10 +6,12 @@
 // Copyright (c) Microsoft Corporation. All rights reserved.
 //------------------------------------------------------------------------------
 
+#include <concurrent_queue.h>
+#include <vector>
 #include "OpenALStream.h"
 
 // { 35919F40-E904-11ce-8A03-00AA006ECB65 }
-DEFINE_GUID(CLSID_Scope,
+DEFINE_GUID(CLSID_OALRend,
   0x35919f40, 0xe904, 0x11ce, 0x8a, 0x3, 0x0, 0xaa, 0x0, 0x6e, 0xcb, 0x65);
 
 class COpenALFilter;
@@ -52,6 +54,7 @@ public:
   // Here's the next block of data from the stream.
   // AddRef it if you are going to hold onto it
   STDMETHODIMP Receive(IMediaSample *pSample);
+  STDMETHODIMP ReceiveCanBlock();
 
 }; // CAudioInputPin
 
@@ -93,8 +96,15 @@ private:
   int m_nBitsPerSample;           // Number bits per sample
   int m_nBlockAlign;              // Alignment on the samples
   int m_MaxValue;                 // Max Value of the POINTS array
+  size_t m_desired_samples = 0;
 
   void CopyWaveform(IMediaSample *pMediaSample);
+  HRESULT CMixer::WaitForFrames();
+  IMediaSample* m_sample_handle = nullptr;
+  concurrency::concurrent_queue<int16_t> m_sample_queue;
+  concurrency::concurrent_queue<int8_t> m_sample_queue_8bit;
+
+  bool m_samples_ready = false;
 
 public:
 
@@ -107,7 +117,8 @@ public:
   HRESULT StopStreaming();
 
   // Called when the input pin receives a sample
-  HRESULT Receive(IMediaSample * pIn);
+  HRESULT Receive(IMediaSample* pIn);
+  size_t MixShort(std::vector<int16_t>* samples, size_t num_frames);
 
 }; // CMixer
 

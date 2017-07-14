@@ -87,13 +87,13 @@ const AMOVIESETUP_PIN sudPins =
   &CLSID_NULL,                // Connects to filter
   L"Output",                  // Connects to pin
   1,                          // Number of pins types
-  &sudPinTypes };            // Pin information
+  &sudPinTypes };             // Pin information
 
 
 const AMOVIESETUP_FILTER sudScope =
 {
-  &CLSID_Scope,               // Filter CLSID
-  L"Oscilloscope",            // String name
+  &CLSID_OALRend,               // Filter CLSID
+  L"OpenAL Renderer",         // String name
   MERIT_DO_NOT_USE,           // Filter merit
   1,                          // Number pins
   &sudPins                    // Pin details
@@ -103,8 +103,8 @@ const AMOVIESETUP_FILTER sudScope =
 // List of class IDs and creator functions for class factory
 
 CFactoryTemplate g_Templates[] = {
-  { L"Oscilloscope"
-  , &CLSID_Scope
+  { L"OpenAL Renderer"
+  , &CLSID_OALRend
   , (LPFNNewCOMObject)COpenALFilter::CreateInstance
   , NULL
   , &sudScope }
@@ -150,20 +150,20 @@ void COpenALFilter::PrintOpenALQueueBack()
 }
 
 COpenALFilter::COpenALFilter(LPUNKNOWN pUnk, HRESULT *phr) :
-  CBaseFilter(NAME("Oscilloscope"), pUnk, (CCritSec *) this, CLSID_Scope),
-  m_Window(NAME("Oscilloscope"), this, phr)
+  CBaseFilter(NAME("OpenAL Renderer"), pUnk, (CCritSec *) this, CLSID_OALRend),
+  m_Window(NAME("OpenAL Renderer"), this, phr)
 {
   ASSERT(phr);
 
   // Create the single input pin
-  m_pInputPin = new CAudioInputPin(this, phr, L"Scope Input Pin");
+  m_pInputPin = new CAudioInputPin(this, phr, L"Audio Input Pin");
   if (m_pInputPin == NULL)
   {
     if (phr)
       *phr = E_OUTOFMEMORY;
   }
 
-  m_openal_device = new COpenALStream(m_pInputPin, static_cast<IBaseFilter*>(this), phr);
+  m_openal_device = new COpenALStream(&m_Window, static_cast<IBaseFilter*>(this), phr);
 
 } // (Constructor)
 
@@ -304,6 +304,7 @@ STDMETHODIMP COpenALFilter::Pause()
   if (m_State == State_Running)
   {
     m_Window.StopStreaming();
+    //m_openal_device->StopDevice();
   }
 
   // tell the pin to go inactive and change state
@@ -357,7 +358,7 @@ STDMETHODIMP COpenALFilter::SetSyncSource(IReferenceClock * pClock)
 CAudioInputPin::CAudioInputPin(COpenALFilter *pFilter,
   HRESULT *phr,
   LPCWSTR pPinName) :
-  CBaseInputPin(NAME("Scope Input Pin"), pFilter, pFilter, phr, pPinName)
+  CBaseInputPin(NAME("Audio Input Pin"), pFilter, pFilter, phr, pPinName)
 {
   m_pFilter = pFilter;
 
@@ -524,6 +525,11 @@ HRESULT CAudioInputPin::Receive(IMediaSample * pSample)
 
 } // Receive
 
+STDMETHODIMP CAudioInputPin::ReceiveCanBlock()
+{
+  return S_OK;
+}
+
   //
   // CMixer Constructor
   //
@@ -604,6 +610,7 @@ HRESULT CMixer::StopStreaming()
   //
 void CMixer::CopyWaveform(IMediaSample *pMediaSample)
 {
+  //waitobject
   BYTE *pWave;                // Pointer to image data
   int  nBytes;
   int  nSamplesPerChan;
@@ -619,6 +626,7 @@ void CMixer::CopyWaveform(IMediaSample *pMediaSample)
   nSamplesPerChan = nBytes / m_nBlockAlign;
 
   m_pRenderer->m_openal_device->m_frequency = m_nSamplesPerSec;
+  size_t pushed_samples = 0;
   switch (m_nBitsPerSample + m_nChannels)
   {
     BYTE * pb;
@@ -633,7 +641,8 @@ void CMixer::CopyWaveform(IMediaSample *pMediaSample)
     while (nSamplesPerChan--)
     {
       uint8_t value = *pb++;  // Make zero centered
-      m_pRenderer->m_openal_device->m_audio_buffer_queue_int8.push(value);
+      m_sample_queue_8bit.push(value);
+      ++pushed_samples;
 
       if (++m_nIndex == m_nSamplesPerSec)
         m_nIndex = 0;
@@ -650,10 +659,12 @@ void CMixer::CopyWaveform(IMediaSample *pMediaSample)
       m_pRenderer->m_openal_device->m_speaker_layout = m_pRenderer->m_openal_device->Stereo;
 
       uint8_t value = *pb++;  // Make zero centered
-      m_pRenderer->m_openal_device->m_audio_buffer_queue_int8.push(value);
+      m_sample_queue_8bit.push(value);
+      ++pushed_samples;
 
       value = *pb++;  // Make zero centered
-      m_pRenderer->m_openal_device->m_audio_buffer_queue_int8.push(value);
+      m_sample_queue_8bit.push(value);
+      ++pushed_samples;
 
       if (++m_nIndex == m_nSamplesPerSec)
         m_nIndex = 0;
@@ -670,7 +681,8 @@ void CMixer::CopyWaveform(IMediaSample *pMediaSample)
     while (nSamplesPerChan--)
     {
       int16_t value = (short)*pw++;
-      m_pRenderer->m_openal_device->m_audio_buffer_queue.push(value);
+      m_sample_queue.push(value);
+      ++pushed_samples;
 
       if (++m_nIndex == m_nSamplesPerSec)
         m_nIndex = 0;
@@ -687,10 +699,12 @@ void CMixer::CopyWaveform(IMediaSample *pMediaSample)
     while (nSamplesPerChan--)
     {
       int16_t value = (short)*pw++;
-      m_pRenderer->m_openal_device->m_audio_buffer_queue.push(value);
+      m_sample_queue.push(value);
+      ++pushed_samples;
 
       value = (short)*pw++;
-      m_pRenderer->m_openal_device->m_audio_buffer_queue.push(value);
+      m_sample_queue.push(value);
+      ++pushed_samples;
 
       if (++m_nIndex == m_nSamplesPerSec)
         m_nIndex = 0;
@@ -706,22 +720,28 @@ void CMixer::CopyWaveform(IMediaSample *pMediaSample)
     while (nSamplesPerChan--)
     {
       int16_t value = (short)*pw++;
-      m_pRenderer->m_openal_device->m_audio_buffer_queue.push(value);
+      m_sample_queue.push(value);
+      ++pushed_samples;
 
       value = (short)*pw++;
-      m_pRenderer->m_openal_device->m_audio_buffer_queue.push(value);
+      m_sample_queue.push(value);
+      ++pushed_samples;
 
       value = (short)*pw++;
-      m_pRenderer->m_openal_device->m_audio_buffer_queue.push(value);
+      m_sample_queue.push(value);
+      ++pushed_samples;
 
       value = (short)*pw++;
-      m_pRenderer->m_openal_device->m_audio_buffer_queue.push(value);
+      m_sample_queue.push(value);
+      ++pushed_samples;
 
       value = (short)*pw++;
-      m_pRenderer->m_openal_device->m_audio_buffer_queue.push(value);
+      m_sample_queue.push(value);
+      ++pushed_samples;
 
       value = (short)*pw++;
-      m_pRenderer->m_openal_device->m_audio_buffer_queue.push(value);
+      m_sample_queue.push(value);
+      ++pushed_samples;
 
       if (++m_nIndex == m_nSamplesPerSec)
         m_nIndex = 0;
@@ -737,28 +757,36 @@ void CMixer::CopyWaveform(IMediaSample *pMediaSample)
     while (nSamplesPerChan--)
     {
       int16_t value = (short)*pw++;
-      m_pRenderer->m_openal_device->m_audio_buffer_queue.push(value);
+      m_sample_queue.push(value);
+      ++pushed_samples;
 
       value = (short)*pw++;
-      m_pRenderer->m_openal_device->m_audio_buffer_queue.push(value);
+      m_sample_queue.push(value);
+      ++pushed_samples;
 
       value = (short)*pw++;
-      m_pRenderer->m_openal_device->m_audio_buffer_queue.push(value);
+      m_sample_queue.push(value);
+      ++pushed_samples;
 
       value = (short)*pw++;
-      m_pRenderer->m_openal_device->m_audio_buffer_queue.push(value);
+      m_sample_queue.push(value);
+      ++pushed_samples;
 
       value = (short)*pw++;
-      m_pRenderer->m_openal_device->m_audio_buffer_queue.push(value);
+      m_sample_queue.push(value);
+      ++pushed_samples;
 
       value = (short)*pw++;
-      m_pRenderer->m_openal_device->m_audio_buffer_queue.push(value);
+      m_sample_queue.push(value);
+      ++pushed_samples;
 
       value = (short)*pw++;
-      m_pRenderer->m_openal_device->m_audio_buffer_queue.push(value);
+      m_sample_queue.push(value);
+      ++pushed_samples;
 
       value = (short)*pw++;
-      m_pRenderer->m_openal_device->m_audio_buffer_queue.push(value);
+      m_sample_queue.push(value);
+      ++pushed_samples;
 
       if (++m_nIndex == m_nSamplesPerSec)
         m_nIndex = 0;
@@ -771,6 +799,13 @@ void CMixer::CopyWaveform(IMediaSample *pMediaSample)
     break;
 
   } // End of format switch
+
+  if (pushed_samples >= m_desired_samples)
+  {
+    m_sample_handle = pMediaSample;
+    m_sample_handle->AddRef();
+    m_samples_ready = true;
+  }
 
 } // CopyWaveform
 
@@ -803,6 +838,83 @@ HRESULT CMixer::Receive(IMediaSample *pSample)
   return NOERROR;
 
 } // Receive
+
+HRESULT CMixer::WaitForFrames()
+{
+  if (m_bStreaming)
+  {
+    while (!m_samples_ready)
+    {
+      if (!m_bStreaming)
+      {
+        return E_FAIL;
+      }
+      std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    }
+
+    m_samples_ready = false;
+
+    return S_OK;
+  }
+  else
+  {
+    return E_FAIL;
+  }
+}
+
+size_t CMixer::MixShort(std::vector<int16_t>* samples, size_t num_frames)
+{
+  if (!samples)
+    return 0;
+
+  // 2 = stereo
+  // 6 = 5.1
+  m_desired_samples = num_frames * m_nChannels;
+
+  // Wait for queue to fill
+  size_t effective_samples = 0;
+
+  if (m_sample_queue.unsafe_size() >= m_desired_samples)
+  {
+    samples->resize(num_frames * m_nChannels);
+    for (size_t i = 0; i < m_desired_samples; ++i)
+    {
+      int16_t value = 0;
+      if (m_sample_queue.try_pop(value))
+      {
+        (*samples)[i] = value;
+      }
+    }
+
+    effective_samples = m_desired_samples;
+  }
+  else
+  {
+    // Release handle if it exists
+    if (m_sample_handle != nullptr)
+    {
+      m_sample_handle->Release();
+      m_sample_handle = nullptr;
+    }
+
+    if (WaitForFrames() == S_OK)
+    {
+      effective_samples = m_sample_queue.unsafe_size();
+      effective_samples = effective_samples - effective_samples % m_nChannels;
+      samples->resize(effective_samples);
+      for (size_t i = 0; i < effective_samples; ++i)
+      {
+        int16_t value = 0;
+        if (m_sample_queue.try_pop(value))
+        {
+          (*samples)[i] = value;
+        }
+      }
+    }
+  }
+
+  return effective_samples / m_nChannels;
+}
 
 
   ////////////////////////////////////////////////////////////////////////

@@ -45,19 +45,19 @@
 #define AL_FORMAT_STEREO32 0x1203
 #endif
 
-class CAudioInputPin;
+class CMixer;
 
 class COpenALStream final : public CBaseReferenceClock
 {
-  friend class CAudioInputPin;
+  friend class CMixer;
 
 public:
   ~COpenALStream();
-  COpenALStream(CAudioInputPin* input_pin, LPUNKNOWN pUnk, HRESULT *phr);
+  COpenALStream(CMixer* audioMixer, LPUNKNOWN pUnk, HRESULT *phr);
 
   // We must make this time depend on the sound card buffers latter,
   // not on the system clock
-  //REFERENCE_TIME GetPrivateTime();
+  REFERENCE_TIME GetPrivateTime();
 
   void SetSyncSource(IReferenceClock *pClock);
   void ClockController(HDRVR hdrvr, DWORD_PTR dwUser,
@@ -72,11 +72,6 @@ public:
   STDMETHODIMP CloseDevice();
   STDMETHODIMP StartDevice();
   STDMETHODIMP StopDevice();
-
-  concurrency::concurrent_queue<uint8_t> m_audio_buffer_queue_int8;
-  concurrency::concurrent_queue<int16_t> m_audio_buffer_queue;
-  concurrency::concurrent_queue<int32_t> m_audio_buffer_queue_int32;
-  concurrency::concurrent_queue<float_t> m_audio_buffer_queue_float;
 
   enum SpeakerLayout
   {
@@ -100,7 +95,6 @@ public:
 
 private:
   std::thread m_thread;
-  CAudioInputPin* m_pinput_pin;
   bool m_pin_locked = false;
   bool m_run_thread = false;
 
@@ -113,6 +107,8 @@ private:
   std::vector<ALuint> m_buffers;
   ALuint m_source = 0;
   ALfloat m_volume = 1.0f;
+
+  CMixer* m_mixer;
 
   // Get from settings
   uint32_t m_latency = 30;
