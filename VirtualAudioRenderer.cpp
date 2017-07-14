@@ -499,20 +499,35 @@ HRESULT CAudioInputPin::Inactive(void)
 HRESULT CAudioInputPin::Receive(IMediaSample * pSample)
 {
   // Lock this with the filter-wide lock
-  CAutoLock lock(m_pFilter);
+  CAutoLock receive_lock(&m_receiveMutex);
 
-  // If we're stopped, then reject this call
-  // (the filter graph may be in mid-change)
-  if (m_pFilter->m_State == State_Stopped)
   {
-    return E_FAIL;
-  }
+    CAutoLock object_lock(this);
 
-  // Check all is well with the base class
-  HRESULT hr = CBaseInputPin::Receive(pSample);
-  if (FAILED(hr))
-  {
-    return hr;
+    // If we're stopped, then reject this call
+    // (the filter graph may be in mid-change)
+    if (m_pFilter->m_State == State_Stopped)
+    {
+      return VFW_E_WRONG_STATE;
+    }
+
+    // Check all is well with the base class
+    HRESULT hr = CBaseInputPin::Receive(pSample);
+    if (FAILED(hr))
+    {
+      return hr;
+    }
+
+    //if (m_SampleProps.dwSampleFlags & AM_SAMPLE_TYPECHANGED)
+    //{
+    //  // TODO: don't recreate the device when possible
+    //  m_renderer.Finish(false, &m_bufferFilled);
+    //  ReturnIfFailed(SetMediaType(static_cast<CMediaType*>(m_SampleProps.pMediaType)));
+    //}
+
+    //if (m_eosUp)
+    //  return S_FALSE;
+
   }
 
   // Send the sample to the video window object for rendering
@@ -802,9 +817,13 @@ void CMixer::CopyWaveform(IMediaSample *pMediaSample)
 
   if (pushed_samples >= m_desired_samples)
   {
-    m_sample_handle = pMediaSample;
-    m_sample_handle->AddRef();
     m_samples_ready = true;
+  }
+
+  // Lock until we want more
+  while (m_desired_samples == 0 || m_samples_ready == true)
+  {
+    std::this_thread::sleep_for(std::chrono::milliseconds(1));
   }
 
 } // CopyWaveform
@@ -852,8 +871,6 @@ HRESULT CMixer::WaitForFrames()
       std::this_thread::sleep_for(std::chrono::milliseconds(1));
     }
 
-    m_samples_ready = false;
-
     return S_OK;
   }
   else
@@ -870,48 +887,37 @@ size_t CMixer::MixShort(std::vector<int16_t>* samples, size_t num_frames)
   // 2 = stereo
   // 6 = 5.1
   m_desired_samples = num_frames * m_nChannels;
+  samples->resize(m_desired_samples);
 
   // Wait for queue to fill
   size_t effective_samples = 0;
 
-  if (m_sample_queue.unsafe_size() >= m_desired_samples)
+  // Still need to check EOS
+  bool all_ok = false;
+  while (m_sample_queue.unsafe_size() < m_desired_samples) //&& m_notEOS)
   {
-    samples->resize(num_frames * m_nChannels);
-    for (size_t i = 0; i < m_desired_samples; ++i)
-    {
-      int16_t value = 0;
-      if (m_sample_queue.try_pop(value))
-      {
-        (*samples)[i] = value;
-      }
-    }
-
-    effective_samples = m_desired_samples;
-  }
-  else
-  {
-    // Release handle if it exists
-    if (m_sample_handle != nullptr)
-    {
-      m_sample_handle->Release();
-      m_sample_handle = nullptr;
-    }
-
+    m_samples_ready = false;
     if (WaitForFrames() == S_OK)
     {
-      effective_samples = m_sample_queue.unsafe_size();
-      effective_samples = effective_samples - effective_samples % m_nChannels;
-      samples->resize(effective_samples);
-      for (size_t i = 0; i < effective_samples; ++i)
-      {
-        int16_t value = 0;
-        if (m_sample_queue.try_pop(value))
-        {
-          (*samples)[i] = value;
-        }
-      }
+      all_ok = true;
+    }
+    else
+    {
+      break;
     }
   }
+
+  for (size_t i = 0; i < m_desired_samples; ++i)
+  {
+    int16_t value = 0;
+    if (m_sample_queue.try_pop(value))
+    {
+      (*samples)[i] = value;
+    }
+  }
+
+  // Set EOS samples here
+  effective_samples = m_desired_samples;
 
   return effective_samples / m_nChannels;
 }

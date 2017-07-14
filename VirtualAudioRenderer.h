@@ -20,7 +20,7 @@ class COpenALOutput;
 
 // Class supporting the scope input pin
 
-class CAudioInputPin : public CBaseInputPin, public CCritSec
+class CAudioInputPin : public CCritSec, public CBaseInputPin
 {
   friend class COpenALFilter;
   friend class CMixer;
@@ -28,6 +28,7 @@ class CAudioInputPin : public CBaseInputPin, public CCritSec
 private:
 
   COpenALFilter *m_pFilter;         // The filter that owns us
+  CCritSec m_receiveMutex;
 
 public:
 
@@ -40,21 +41,21 @@ public:
   HRESULT BreakConnect();
 
   // Check that we can support this input type
-  HRESULT CheckMediaType(const CMediaType *pmt);
+  HRESULT CheckMediaType(const CMediaType *pmt) override;
 
   // Actually set the current format
-  HRESULT SetMediaType(const CMediaType *pmt);
+  HRESULT SetMediaType(const CMediaType *pmt) override;
 
   // IMemInputPin virtual methods
 
   // Override so we can show and hide the window
-  HRESULT Active(void);
-  HRESULT Inactive(void);
+  HRESULT Active(void) override;
+  HRESULT Inactive(void) override;
 
   // Here's the next block of data from the stream.
   // AddRef it if you are going to hold onto it
-  STDMETHODIMP Receive(IMediaSample *pSample);
-  STDMETHODIMP ReceiveCanBlock();
+  STDMETHODIMP Receive(IMediaSample *pSample) override;
+  STDMETHODIMP ReceiveCanBlock() override;
 
 }; // CAudioInputPin
 
@@ -100,11 +101,11 @@ private:
 
   void CopyWaveform(IMediaSample *pMediaSample);
   HRESULT CMixer::WaitForFrames();
-  IMediaSample* m_sample_handle = nullptr;
+
   concurrency::concurrent_queue<int16_t> m_sample_queue;
   concurrency::concurrent_queue<int8_t> m_sample_queue_8bit;
 
-  bool m_samples_ready = false;
+  bool m_samples_ready = true;
 
 public:
 
