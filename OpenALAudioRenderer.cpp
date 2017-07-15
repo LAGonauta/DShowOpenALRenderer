@@ -36,14 +36,14 @@ const AMOVIESETUP_PIN sudPins =
   FALSE,                      // Allowed zero pins
   FALSE,                      // Allowed many
   &CLSID_NULL,                // Connects to filter
-  L"Output",                  // Connects to pin
+  nullptr,                    // Connects to pin
   1,                          // Number of pins types
   &sudPinTypes };             // Pin information
 
 
-const AMOVIESETUP_FILTER sudScope =
+const AMOVIESETUP_FILTER sudOALRend =
 {
-  &CLSID_OALRend,               // Filter CLSID
+  &CLSID_OALRend,             // Filter CLSID
   L"OpenAL Renderer",         // String name
   MERIT_DO_NOT_USE,           // Filter merit
   1,                          // Number pins
@@ -58,7 +58,7 @@ CFactoryTemplate g_Templates[] = {
   , &CLSID_OALRend
   , (LPFNNewCOMObject)COpenALFilter::CreateInstance
   , NULL
-  , &sudScope }
+  , &sudOALRend }
 };
 int g_cTemplates = sizeof(g_Templates) / sizeof(g_Templates[0]);
 
@@ -130,6 +130,11 @@ COpenALFilter::~COpenALFilter()
   ASSERT(m_openal_device);
   delete m_openal_device;
   m_openal_device = NULL;
+
+  if (m_seeking != nullptr)
+  {
+    m_seeking->Release();
+  }
 
 } // (Destructor)
 
