@@ -19,8 +19,9 @@ COpenALStream::~COpenALStream(void)
 }
 
 COpenALStream::COpenALStream(CMixer* audioMixer, LPUNKNOWN pUnk, HRESULT * phr)
-  : CBaseReferenceClock(NAME("OpenAL Stream Clock"), pUnk, phr)
-  , m_pCurrentRefClock(0), m_pPrevRefClock(0)
+  : CBaseReferenceClock(NAME("OpenAL Stream Clock"), pUnk, phr),
+    CBasicAudio(L"OpenAL Volume Setting", pUnk),
+    m_pCurrentRefClock(0), m_pPrevRefClock(0)
 {
   EXECUTE_ASSERT(SUCCEEDED(OpenDevice()));
 
@@ -254,6 +255,66 @@ STDMETHODIMP COpenALStream::StopDevice(void)
   {
     m_thread.join();
   }
+
+  return S_OK;
+}
+
+// Code from sanear
+STDMETHODIMP COpenALStream::put_Volume(long volume)
+{
+  if (volume < -10000 || volume > 0)
+    return E_FAIL;
+
+  float f = (volume == 0) ?
+    1.0f : pow(10.0f, (float)volume / 2000.0f);
+
+  alSourcef(m_source, AL_GAIN, f);
+  m_volume = f;
+
+  return S_OK;
+}
+
+STDMETHODIMP COpenALStream::get_Volume(long * pVolume)
+{
+  CheckPointer(pVolume, E_POINTER);
+
+  float* f;
+  if (alIsSource(m_source))
+  {
+    alGetSourcef(m_source, AL_GAIN, f);
+  }
+  else
+  {
+    *f = m_volume;
+  }
+
+  *pVolume = (*f == 1.0f) ?
+    0 : (long)(log10(*f) * 2000.0f);
+
+  ASSERT(*pVolume <= 0 && *pVolume >= -10000);
+
+  return S_OK;
+}
+
+STDMETHODIMP COpenALStream::put_Balance(long balance)
+{
+  if (balance < -10000 || balance > 10000)
+  {
+    return E_FAIL;
+  }
+
+  m_fake_balance = balance;
+
+  return S_OK;
+}
+
+STDMETHODIMP COpenALStream::get_Balance(long* pBalance)
+{
+  CheckPointer(pBalance, E_POINTER);
+
+  *pBalance = m_fake_balance;
+
+  ASSERT(*pBalance >= -10000 && *pBalance <= 10000);
 
   return S_OK;
 }

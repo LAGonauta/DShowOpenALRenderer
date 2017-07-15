@@ -47,7 +47,7 @@
 
 class CMixer;
 
-class COpenALStream final : public CBaseReferenceClock
+class COpenALStream final : public CBaseReferenceClock, public CBasicAudio
 {
   friend class CMixer;
 
@@ -90,6 +90,13 @@ public:
   STDMETHODIMP CloseDevice();
   STDMETHODIMP StartDevice();
   STDMETHODIMP StopDevice();
+
+  STDMETHODIMP put_Volume(long volume) override;
+  STDMETHODIMP get_Volume(long* pVolume) override;
+  STDMETHODIMP put_Balance(long balance) override;
+  STDMETHODIMP get_Balance(long* pBalance) override;
+  long m_fake_balance = 0;
+
   HRESULT Pause();
   HRESULT Stop();
   HRESULT setSpeakerLayout(SpeakerLayout layout);

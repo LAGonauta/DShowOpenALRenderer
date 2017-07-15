@@ -189,14 +189,17 @@ HRESULT COpenALFilter::NonDelegatingQueryInterface(REFIID riid, void ** ppv)
 {
   CheckPointer(ppv, E_POINTER);
 
-  if (riid == IID_IReferenceClock)
+  if (riid == IID_IReferenceClock || riid == IID_IReferenceClockTimerControl)
   {
     return GetInterface(static_cast<IReferenceClock*>(m_openal_device), ppv);
   }
-  else
+
+  if (riid == IID_IBasicAudio)
   {
-    return CBaseFilter::NonDelegatingQueryInterface(riid, ppv);
+    return GetInterface(static_cast<IBasicAudio*>(m_openal_device), ppv);
   }
+
+  return CBaseFilter::NonDelegatingQueryInterface(riid, ppv);
 }
 
 //
