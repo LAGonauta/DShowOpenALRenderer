@@ -268,8 +268,8 @@ STDMETHODIMP COpenALStream::put_Volume(long volume)
   float f = (volume == 0) ?
     1.0f : pow(10.0f, (float)volume / 2000.0f);
 
-  alSourcef(m_source, AL_GAIN, f);
   m_volume = f;
+  alSourcef(m_source, AL_GAIN, m_volume);
 
   return S_OK;
 }
@@ -278,14 +278,10 @@ STDMETHODIMP COpenALStream::get_Volume(long * pVolume)
 {
   CheckPointer(pVolume, E_POINTER);
 
-  float* f;
+  float* f = &m_volume;
   if (alIsSource(m_source))
   {
     alGetSourcef(m_source, AL_GAIN, f);
-  }
-  else
-  {
-    *f = m_volume;
   }
 
   *pVolume = (*f == 1.0f) ?
