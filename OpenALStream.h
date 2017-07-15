@@ -115,6 +115,7 @@ private:
   void SoundLoop();
   void SetVolume(int volume);
   void Destroy();
+  ALenum CheckALError(std::wstring desc);
 
   uint32_t num_buffers = 3;
 

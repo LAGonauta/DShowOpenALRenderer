@@ -195,6 +195,24 @@ void COpenALStream::ClockController(HDRVR hdrvr, DWORD_PTR dwUser, DWORD_PTR dw2
 //
 // AyuanX: Spec says OpenAL1.1 is thread safe already
 //
+
+std::vector<std::string> GetAllDevices()
+{
+  std::vector<std::string> devices_names_list;
+  ALint device_index = 0;
+  const ALchar* device_names = alcGetString(nullptr, ALC_ALL_DEVICES_SPECIFIER);
+
+  while (device_names && *device_names)
+  {
+    std::string name = device_names;
+    devices_names_list.push_back(name);
+    device_index++;
+    device_names += strlen(device_names) + 1;
+  }
+
+  return devices_names_list;
+}
+
 STDMETHODIMP COpenALStream::OpenDevice(void)
 {
   if (!alcIsExtensionPresent(nullptr, "ALC_ENUMERATION_EXT"))
@@ -203,17 +221,22 @@ STDMETHODIMP COpenALStream::OpenDevice(void)
     return E_FAIL;
   }
 
-  //auto s = (char *)alcGetString(nullptr, ALC_ALL_DEVICES_SPECIFIER);
+  const char* default_device = alcGetString(nullptr, ALC_DEFAULT_DEVICE_SPECIFIER);
 
-  const char* default_device_dame = alcGetString(nullptr, ALC_DEFAULT_DEVICE_SPECIFIER);
-  printf_s("Found OpenAL device %s", default_device_dame);
+  if (!strlen(default_device))
+  {
+    printf_s("No device found.\n");
+    return E_FAIL;
+  }
 
-  //default_device_dame = s;
+  std::vector<std::string> devices = GetAllDevices();
 
-  ALCdevice* device = alcOpenDevice(default_device_dame);
+  printf_s("Found OpenAL device %s", devices[0].c_str());
+
+  ALCdevice* device = alcOpenDevice(devices[0].c_str());
   if (!device)
   {
-    printf_s("OpenAL: can't open device %s", default_device_dame);
+    printf_s("OpenAL: can't open device %s", devices[0].c_str());
     return E_FAIL;
   }
 
@@ -221,7 +244,7 @@ STDMETHODIMP COpenALStream::OpenDevice(void)
   if (!context)
   {
     alcCloseDevice(device);
-    printf_s("OpenAL: can't create context for device %s", default_device_dame);
+    printf_s("OpenAL: can't create context for device %s", devices[0].c_str());
     return E_FAIL;
   }
 
@@ -333,6 +356,44 @@ void COpenALStream::Destroy()
   alcCloseDevice(device);
 }
 
+ALenum COpenALStream::CheckALError(std::wstring desc)
+{
+  ALenum err = alGetError();
+
+  if (err != AL_NO_ERROR)
+  {
+    std::wstring type;
+
+    switch (err)
+    {
+    case AL_INVALID_NAME:
+      type = L"AL_INVALID_NAME";
+      break;
+    case AL_INVALID_ENUM:
+      type = L"AL_INVALID_ENUM";
+      break;
+    case AL_INVALID_VALUE:
+      type = L"AL_INVALID_VALUE";
+      break;
+    case AL_INVALID_OPERATION:
+      type = L"AL_INVALID_OPERATION";
+      break;
+    case AL_OUT_OF_MEMORY:
+      type = L"AL_OUT_OF_MEMORY";
+      break;
+    default:
+      type = L"UNKNOWN_ERROR";
+      break;
+    }
+
+    wchar_t string_buf[1024] = { 0 };
+    swprintf_s(string_buf, sizeof(string_buf), L"Error %s: %08x %s\n", desc.c_str(), err, type.c_str());
+    OutputDebugString(string_buf);
+  }
+
+  return err;
+}
+
 HRESULT COpenALStream::Pause()
 {
   ALint state = 0;
@@ -433,44 +494,6 @@ void COpenALStream::SetVolume(int volume)
 
   if (m_source)
     alSourcef(m_source, AL_GAIN, m_volume);
-}
-
-static ALenum CheckALError(std::wstring desc)
-{
-  ALenum err = alGetError();
-
-  if (err != AL_NO_ERROR)
-  {
-    std::wstring type;
-
-    switch (err)
-    {
-    case AL_INVALID_NAME:
-      type = L"AL_INVALID_NAME";
-      break;
-    case AL_INVALID_ENUM:
-      type = L"AL_INVALID_ENUM";
-      break;
-    case AL_INVALID_VALUE:
-      type = L"AL_INVALID_VALUE";
-      break;
-    case AL_INVALID_OPERATION:
-      type = L"AL_INVALID_OPERATION";
-      break;
-    case AL_OUT_OF_MEMORY:
-      type = L"AL_OUT_OF_MEMORY";
-      break;
-    default:
-      type = L"UNKNOWN_ERROR";
-      break;
-    }
-
-    wchar_t string_buf[1024] = { 0 };
-    swprintf_s(string_buf, sizeof(string_buf), L"Error %s: %08x %s\n", desc.c_str(), err, type.c_str());
-    OutputDebugString(string_buf);
-  }
-
-  return err;
 }
 
 static bool IsCreativeXFi()
