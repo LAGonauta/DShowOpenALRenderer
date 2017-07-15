@@ -8,6 +8,8 @@
 
 #include <concurrent_queue.h>
 #include <vector>
+#include <comdef.h>
+
 #include "OpenALStream.h"
 
 // { 35919F40-E904-11ce-8A03-00AA006ECB65 }
@@ -140,11 +142,11 @@ public:
 
   DECLARE_IUNKNOWN
 
-  STDMETHODIMP NonDelegatingQueryInterface(REFIID riid, void ** ppv);
-  STDMETHODIMP Stop();
-  STDMETHODIMP Pause();
-  STDMETHODIMP Run(REFERENCE_TIME tStart);
-  STDMETHODIMP SetSyncSource(IReferenceClock *pClock);
+  STDMETHODIMP NonDelegatingQueryInterface(REFIID riid, void ** ppv) override;
+  STDMETHODIMP Stop() override;
+  STDMETHODIMP Pause() override;
+  STDMETHODIMP Run(REFERENCE_TIME tStart) override;
+  STDMETHODIMP SetSyncSource(IReferenceClock *pClock) override;
 
   // OpenAL
   COpenALStream* m_openal_device;
@@ -171,5 +173,6 @@ private:
 
   CAudioInputPin *m_pInputPin;   // Handles pin interfaces
   CMixer m_mixer;         // Looks after the window
+  IUnknownPtr m_seeking;
 
 }; // COpenALFilter

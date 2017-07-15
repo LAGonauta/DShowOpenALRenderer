@@ -75,7 +75,8 @@ public:
 
   // We must make this time depend on the sound card buffers latter,
   // not on the system clock
-  REFERENCE_TIME GetPrivateTime();
+  REFERENCE_TIME GetPrivateTime() override;
+  //HRESULT SetTimeDelta(const REFERENCE_TIME &TimeDelta);
 
   void SetSyncSource(IReferenceClock *pClock);
   void ClockController(HDRVR hdrvr, DWORD_PTR dwUser,

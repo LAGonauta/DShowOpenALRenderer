@@ -189,6 +189,11 @@ HRESULT COpenALFilter::NonDelegatingQueryInterface(REFIID riid, void ** ppv)
 {
   CheckPointer(ppv, E_POINTER);
 
+  if (riid == IID_IUnknown)
+  {
+    return CUnknown::NonDelegatingQueryInterface(riid, ppv);
+  }
+
   if (riid == IID_IReferenceClock || riid == IID_IReferenceClockTimerControl)
   {
     return GetInterface(static_cast<IReferenceClock*>(m_openal_device), ppv);
@@ -197,6 +202,20 @@ HRESULT COpenALFilter::NonDelegatingQueryInterface(REFIID riid, void ** ppv)
   if (riid == IID_IBasicAudio)
   {
     return GetInterface(static_cast<IBasicAudio*>(m_openal_device), ppv);
+  }
+
+  if (riid == IID_IMediaSeeking)
+  {
+    if (m_seeking == nullptr)
+    {
+      // Actually should be true, but still not implemented
+      HRESULT hr = CreatePosPassThru(GetOwner(), FALSE, m_pInputPin, &m_seeking);
+      if (FAILED(hr))
+      {
+        return hr;
+      }
+    }
+    return m_seeking->QueryInterface(riid, ppv);
   }
 
   return CBaseFilter::NonDelegatingQueryInterface(riid, ppv);
