@@ -8,6 +8,8 @@
 
 #include <concurrent_queue.h>
 #include <vector>
+#include <mutex>
+#include <condition_variable>
 #include <comdef.h>
 
 #include "OpenALStream.h"
@@ -88,16 +90,14 @@ private:
   HINSTANCE m_hInstance;          // Global module instance handle
   COpenALFilter *m_pRenderer;      // The owning renderer object
 
-  BOOL m_bStreaming;              // Are we currently streaming
+  std::atomic<BOOL> m_bStreaming;              // Are we currently streaming
 
-  int m_nPoints;                  // Size of m_pPoints[1|2]
   int m_LastMediaSampleSize;      // Size of last MediaSample
 
   int m_nChannels;                // number of active channels
   int m_nSamplesPerSec;           // Samples per second
   int m_nBitsPerSample;           // Number bits per sample
   int m_nBlockAlign;              // Alignment on the samples
-  int m_MaxValue;                 // Max Value of the POINTS array
   size_t m_desired_samples = 0;
 
   void CopyWaveform(IMediaSample *pMediaSample);
@@ -107,7 +107,16 @@ private:
   concurrency::concurrent_queue<int8_t> m_sample_queue_8bit;
   concurrency::concurrent_queue<int32_t> m_sample_queue_32bit;
 
-  bool m_samples_ready = true;
+  // Locking between inbound samples and the mixer
+  std::atomic<size_t> m_rendered_samples = 0;
+
+  std::atomic<bool> m_samples_ready = false;
+  std::mutex m_samples_ready_mutex;
+  std::condition_variable m_samples_ready_cv;
+
+  std::atomic<bool> m_request_samples = false;
+  std::mutex m_request_samples_mutex;
+  std::condition_variable m_request_samples_cv;
 
 public:
 

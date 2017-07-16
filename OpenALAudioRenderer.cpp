@@ -567,7 +567,6 @@ STDMETHODIMP CAudioInputPin::ReceiveCanBlock()
 CMixer::CMixer(TCHAR *pName, COpenALFilter *pRenderer, HRESULT *phr) :
   m_hInstance(g_hInst),
   m_pRenderer(pRenderer),
-  m_nPoints(0),
   m_bStreaming(FALSE),
   m_LastMediaSampleSize(0)
 {
@@ -711,16 +710,27 @@ void CMixer::CopyWaveform(IMediaSample *pMediaSample)
     }
   }
 
-  if (pushed_samples >= m_desired_samples)
+  // Locking between inbound samples and the mixer
+  m_rendered_samples = pushed_samples;
+
   {
+    std::unique_lock<std::mutex> lk_sr(m_samples_ready_mutex);
     m_samples_ready = true;
+    m_samples_ready_cv.notify_one();
   }
 
-  // Lock until we want more
-  while (m_desired_samples == 0 || m_samples_ready == true)
   {
-    std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    std::unique_lock<std::mutex> lk_rs(m_request_samples_mutex);
+    while (m_request_samples == false)
+    {
+      // Wait for only 500 ms, just in case
+      m_request_samples_cv.wait_for(lk_rs, std::chrono::milliseconds(500));
+    }
+
+    // We already delivered them, set it back to false
+    m_request_samples = false;
   }
+
 
 } // CopyWaveform
 
@@ -758,6 +768,7 @@ HRESULT CMixer::WaitForFrames(size_t num_of_bits)
 {
   if (m_bStreaming)
   {
+    std::unique_lock<std::mutex> lk(m_samples_ready_mutex);
     while (!m_samples_ready)
     {
       if (!m_bStreaming)
@@ -771,8 +782,12 @@ HRESULT CMixer::WaitForFrames(size_t num_of_bits)
         return E_FAIL;
       }
 
-      std::this_thread::sleep_for(std::chrono::milliseconds(1));
+      // Re-check everything after 30 ms
+      m_samples_ready_cv.wait_for(lk, std::chrono::milliseconds(30));
     }
+
+    // We already received them
+    m_samples_ready = false;
 
     return S_OK;
   }
@@ -799,7 +814,12 @@ size_t CMixer::Mix(std::vector<int16_t>* samples, size_t num_frames)
   bool all_ok = false;
   while (m_sample_queue.unsafe_size() < m_desired_samples) //&& m_notEOS)
   {
-    m_samples_ready = false;
+    {
+      std::unique_lock<std::mutex> lk(m_request_samples_mutex);
+      m_request_samples = true;
+      m_request_samples_cv.notify_one();
+    }
+
     if (WaitForFrames(16) == S_OK)
     {
       all_ok = true;
@@ -841,7 +861,12 @@ size_t CMixer::Mix(std::vector<int32_t>* samples, size_t num_frames)
   bool all_ok = false;
   while (m_sample_queue_32bit.unsafe_size() < m_desired_samples) //&& m_notEOS)
   {
-    m_samples_ready = false;
+    {
+      std::unique_lock<std::mutex> lk(m_request_samples_mutex);
+      m_request_samples = true;
+      m_request_samples_cv.notify_one();
+    }
+
     if (WaitForFrames(32) == S_OK)
     {
       all_ok = true;
