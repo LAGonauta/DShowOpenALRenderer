@@ -90,7 +90,7 @@ private:
   HINSTANCE m_hInstance;          // Global module instance handle
   COpenALFilter *m_pRenderer;      // The owning renderer object
 
-  std::atomic<BOOL> m_bStreaming;              // Are we currently streaming
+  std::atomic<bool> m_bStreaming;              // Are we currently streaming
 
   int m_LastMediaSampleSize;      // Size of last MediaSample
 

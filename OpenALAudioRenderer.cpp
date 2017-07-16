@@ -713,11 +713,8 @@ void CMixer::CopyWaveform(IMediaSample *pMediaSample)
   // Locking between inbound samples and the mixer
   m_rendered_samples = pushed_samples;
 
-  {
-    std::unique_lock<std::mutex> lk_sr(m_samples_ready_mutex);
-    m_samples_ready = true;
-    m_samples_ready_cv.notify_one();
-  }
+  m_samples_ready = true;
+  m_samples_ready_cv.notify_one();
 
   {
     std::unique_lock<std::mutex> lk_rs(m_request_samples_mutex);
@@ -730,7 +727,6 @@ void CMixer::CopyWaveform(IMediaSample *pMediaSample)
     // We already delivered them, set it back to false
     m_request_samples = false;
   }
-
 
 } // CopyWaveform
 
@@ -814,11 +810,8 @@ size_t CMixer::Mix(std::vector<int16_t>* samples, size_t num_frames)
   bool all_ok = false;
   while (m_sample_queue.unsafe_size() < m_desired_samples) //&& m_notEOS)
   {
-    {
-      std::unique_lock<std::mutex> lk(m_request_samples_mutex);
-      m_request_samples = true;
-      m_request_samples_cv.notify_one();
-    }
+    m_request_samples = true;
+    m_request_samples_cv.notify_one();
 
     if (WaitForFrames(16) == S_OK)
     {
@@ -861,11 +854,8 @@ size_t CMixer::Mix(std::vector<int32_t>* samples, size_t num_frames)
   bool all_ok = false;
   while (m_sample_queue_32bit.unsafe_size() < m_desired_samples) //&& m_notEOS)
   {
-    {
-      std::unique_lock<std::mutex> lk(m_request_samples_mutex);
-      m_request_samples = true;
-      m_request_samples_cv.notify_one();
-    }
+    m_request_samples = true;
+    m_request_samples_cv.notify_one();
 
     if (WaitForFrames(32) == S_OK)
     {
