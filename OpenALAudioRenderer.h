@@ -91,7 +91,6 @@ private:
   BOOL m_bStreaming;              // Are we currently streaming
 
   int m_nPoints;                  // Size of m_pPoints[1|2]
-  int m_nIndex;                   // Index of last sample written
   int m_LastMediaSampleSize;      // Size of last MediaSample
 
   int m_nChannels;                // number of active channels
@@ -102,10 +101,11 @@ private:
   size_t m_desired_samples = 0;
 
   void CopyWaveform(IMediaSample *pMediaSample);
-  HRESULT CMixer::WaitForFrames();
+  HRESULT CMixer::WaitForFrames(size_t num_of_bits);
 
   concurrency::concurrent_queue<int16_t> m_sample_queue;
   concurrency::concurrent_queue<int8_t> m_sample_queue_8bit;
+  concurrency::concurrent_queue<int32_t> m_sample_queue_32bit;
 
   bool m_samples_ready = true;
 
@@ -122,7 +122,8 @@ public:
 
   // Called when the input pin receives a sample
   HRESULT Receive(IMediaSample* pIn);
-  size_t MixShort(std::vector<int16_t>* samples, size_t num_frames);
+  size_t Mix(std::vector<int16_t>* samples, size_t num_frames);
+  size_t Mix(std::vector<int32_t>* samples, size_t num_frames);
 
 }; // CMixer
 

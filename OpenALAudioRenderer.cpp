@@ -306,7 +306,7 @@ STDMETHODIMP COpenALFilter::Run(REFERENCE_TIME tStart)
   {
     return hr;
   }
-  
+
   if (fsOld != State_Running)
   {
     m_mixer.StartStreaming();
@@ -322,9 +322,9 @@ STDMETHODIMP COpenALFilter::SetSyncSource(IReferenceClock * pClock)
   return CBaseFilter::SetSyncSource(pClock);
 }
 
-  //
-  // Constructor
-  //
+//
+// Constructor
+//
 CAudioInputPin::CAudioInputPin(COpenALFilter *pFilter,
   HRESULT *phr,
   LPCWSTR pPinName) :
@@ -432,9 +432,55 @@ HRESULT CAudioInputPin::SetMediaType(const CMediaType *pmt)
     m_pFilter->m_mixer.m_nBitsPerSample = pwf->wBitsPerSample;
     m_pFilter->m_mixer.m_nBlockAlign = pwf->nBlockAlign;
 
-    m_pFilter->m_mixer.m_MaxValue = 128;
-    m_pFilter->m_mixer.m_nIndex = 0;
+    m_pFilter->m_openal_device->setFrequency(pwf->nSamplesPerSec);
 
+    switch (pwf->nChannels)
+    {
+    case 1:
+    {
+      m_pFilter->m_openal_device->setSpeakerLayout(m_pFilter->m_openal_device->Mono);
+      break;
+    }
+    case 2:
+    {
+      m_pFilter->m_openal_device->setSpeakerLayout(m_pFilter->m_openal_device->Stereo);
+      break;
+    }
+    case 4:
+    {
+      m_pFilter->m_openal_device->setSpeakerLayout(m_pFilter->m_openal_device->Quad);
+      break;
+    }
+    case 6:
+    {
+      m_pFilter->m_openal_device->setSpeakerLayout(m_pFilter->m_openal_device->Surround6);
+      break;
+    }
+    case 8:
+    {
+      m_pFilter->m_openal_device->setSpeakerLayout(m_pFilter->m_openal_device->Surround8);
+      break;
+    }
+    }
+
+    switch (pwf->wBitsPerSample)
+    {
+    case 8:
+    {
+      m_pFilter->m_openal_device->setBitness(m_pFilter->m_openal_device->bit8);
+      break;
+    }
+    case 16:
+    {
+      m_pFilter->m_openal_device->setBitness(m_pFilter->m_openal_device->bit8);
+      break;
+    }
+    case 32:
+    {
+      m_pFilter->m_openal_device->setBitness(m_pFilter->m_openal_device->bit8);
+      break;
+    }
+    }
   }
 
   return hr;
@@ -493,12 +539,12 @@ HRESULT CAudioInputPin::Receive(IMediaSample * pSample)
       return hr;
     }
 
-    //if (m_SampleProps.dwSampleFlags & AM_SAMPLE_TYPECHANGED)
-    //{
-    //  // TODO: don't recreate the device when possible
-    //  m_renderer.Finish(false, &m_bufferFilled);
-    //  ReturnIfFailed(SetMediaType(static_cast<CMediaType*>(m_SampleProps.pMediaType)));
-    //}
+    if (m_SampleProps.dwSampleFlags & AM_SAMPLE_TYPECHANGED)
+    {
+      // TODO: don't recreate the device when possible
+      //m_renderer.Finish(false, &m_bufferFilled);
+      SetMediaType(static_cast<CMediaType*>(m_SampleProps.pMediaType));
+    }
 
     //if (m_eosUp)
     //  return S_FALSE;
@@ -515,9 +561,9 @@ STDMETHODIMP CAudioInputPin::ReceiveCanBlock()
   return S_OK;
 }
 
-  //
-  // CMixer Constructor
-  //
+//
+// CMixer Constructor
+//
 CMixer::CMixer(TCHAR *pName, COpenALFilter *pRenderer, HRESULT *phr) :
   m_hInstance(g_hInst),
   m_pRenderer(pRenderer),
@@ -590,14 +636,14 @@ bool CMixer::IsStreaming()
   return m_bStreaming;
 }
 
-  //
-  // CopyWaveform
-  //
-  // Copy the current MediaSample into a POINT array so we can use GDI
-  // to paint the waveform.  The POINT array contains a 1 second history
-  // of the past waveform.  The "Y" values are normalized to a range of
-  // +128 to -127 within the POINT array.
-  //
+//
+// CopyWaveform
+//
+// Copy the current MediaSample into a POINT array so we can use GDI
+// to paint the waveform.  The POINT array contains a 1 second history
+// of the past waveform.  The "Y" values are normalized to a range of
+// +128 to -127 within the POINT array.
+//
 void CMixer::CopyWaveform(IMediaSample *pMediaSample)
 {
   //waitobject
@@ -615,180 +661,55 @@ void CMixer::CopyWaveform(IMediaSample *pMediaSample)
   nBytes = pMediaSample->GetActualDataLength();
   nSamplesPerChan = nBytes / m_nBlockAlign;
 
-  m_pRenderer->m_openal_device->m_frequency = m_nSamplesPerSec;
   size_t pushed_samples = 0;
-  switch (m_nBitsPerSample + m_nChannels)
+  if (m_nBitsPerSample == 8)
   {
-    BYTE * pb;
-    WORD * pw;
-
-  case 9:
-  {   // Mono, 8-bit
     m_pRenderer->m_openal_device->setBitness(m_pRenderer->m_openal_device->bit8);
-    m_pRenderer->m_openal_device->setSpeakerLayout(m_pRenderer->m_openal_device->Mono);
+    BYTE* pb = pWave;
 
-    pb = pWave;
     while (nSamplesPerChan--)
     {
-      uint8_t value = *pb++;  // Make zero centered
-      m_sample_queue_8bit.push(value);
-      ++pushed_samples;
-
-      if (++m_nIndex == m_nSamplesPerSec)
-        m_nIndex = 0;
+      uint8_t value = 0;
+      for (int i = 0; i < m_nChannels; ++i)
+      {
+        value = *pb++;
+        m_sample_queue_8bit.push(value);
+        ++pushed_samples;
+      }
     }
-    break;
   }
-
-  case 10:
-  {   // Stereo, 8-bit
-    pb = pWave;
-    while (nSamplesPerChan--)
-    {
-      m_pRenderer->m_openal_device->setBitness(m_pRenderer->m_openal_device->bit8);
-      m_pRenderer->m_openal_device->setSpeakerLayout(m_pRenderer->m_openal_device->Stereo);
-
-      uint8_t value = *pb++;  // Make zero centered
-      m_sample_queue_8bit.push(value);
-      ++pushed_samples;
-
-      value = *pb++;  // Make zero centered
-      m_sample_queue_8bit.push(value);
-      ++pushed_samples;
-
-      if (++m_nIndex == m_nSamplesPerSec)
-        m_nIndex = 0;
-    }
-    break;
-  }
-
-  case 17:
-  { // Mono, 16-bit
+  else if (m_nBitsPerSample == 16)
+  {
     m_pRenderer->m_openal_device->setBitness(m_pRenderer->m_openal_device->bit16);
-    m_pRenderer->m_openal_device->setSpeakerLayout(m_pRenderer->m_openal_device->Mono);
+    WORD* pw = (WORD*)pWave;
 
-    pw = (WORD *)pWave;
     while (nSamplesPerChan--)
     {
-      int16_t value = (short)*pw++;
-      m_sample_queue.push(value);
-      ++pushed_samples;
-
-      if (++m_nIndex == m_nSamplesPerSec)
-        m_nIndex = 0;
+      uint16_t value = 0;
+      for (int i = 0; i < m_nChannels; ++i)
+      {
+        value = *pw++;
+        m_sample_queue.push(value);
+        ++pushed_samples;
+      }
     }
-    break;
   }
+  else if (m_nBitsPerSample == 32)
+  {
+    m_pRenderer->m_openal_device->setBitness(m_pRenderer->m_openal_device->bit32);
+    DWORD* pdw = (DWORD*)pWave;
 
-  case 18:
-  { // Stereo, 16-bit
-    m_pRenderer->m_openal_device->setBitness(m_pRenderer->m_openal_device->bit16);
-    m_pRenderer->m_openal_device->setSpeakerLayout(m_pRenderer->m_openal_device->Stereo);
-
-    pw = (WORD *)pWave;
     while (nSamplesPerChan--)
     {
-      int16_t value = (short)*pw++;
-      m_sample_queue.push(value);
-      ++pushed_samples;
-
-      value = (short)*pw++;
-      m_sample_queue.push(value);
-      ++pushed_samples;
-
-      if (++m_nIndex == m_nSamplesPerSec)
-        m_nIndex = 0;
+      uint32_t value = 0;
+      for (int i = 0; i < m_nChannels; ++i)
+      {
+        value = *pdw++;
+        m_sample_queue_32bit.push(value);
+        ++pushed_samples;
+      }
     }
-    break;
   }
-  case 22:
-  { // 5.1 Surround, 16-bit
-    m_pRenderer->m_openal_device->setBitness(m_pRenderer->m_openal_device->bit16);
-    m_pRenderer->m_openal_device->setSpeakerLayout(m_pRenderer->m_openal_device->Surround6);
-
-    pw = (WORD *)pWave;
-    while (nSamplesPerChan--)
-    {
-      int16_t value = (short)*pw++;
-      m_sample_queue.push(value);
-      ++pushed_samples;
-
-      value = (short)*pw++;
-      m_sample_queue.push(value);
-      ++pushed_samples;
-
-      value = (short)*pw++;
-      m_sample_queue.push(value);
-      ++pushed_samples;
-
-      value = (short)*pw++;
-      m_sample_queue.push(value);
-      ++pushed_samples;
-
-      value = (short)*pw++;
-      m_sample_queue.push(value);
-      ++pushed_samples;
-
-      value = (short)*pw++;
-      m_sample_queue.push(value);
-      ++pushed_samples;
-
-      if (++m_nIndex == m_nSamplesPerSec)
-        m_nIndex = 0;
-    }
-    break;
-  }
-  case 24:
-  { // 7.1 Surround, 16-bit
-    m_pRenderer->m_openal_device->setBitness(m_pRenderer->m_openal_device->bit16);
-    m_pRenderer->m_openal_device->setSpeakerLayout(m_pRenderer->m_openal_device->Surround8);
-
-    pw = (WORD *)pWave;
-    while (nSamplesPerChan--)
-    {
-      int16_t value = (short)*pw++;
-      m_sample_queue.push(value);
-      ++pushed_samples;
-
-      value = (short)*pw++;
-      m_sample_queue.push(value);
-      ++pushed_samples;
-
-      value = (short)*pw++;
-      m_sample_queue.push(value);
-      ++pushed_samples;
-
-      value = (short)*pw++;
-      m_sample_queue.push(value);
-      ++pushed_samples;
-
-      value = (short)*pw++;
-      m_sample_queue.push(value);
-      ++pushed_samples;
-
-      value = (short)*pw++;
-      m_sample_queue.push(value);
-      ++pushed_samples;
-
-      value = (short)*pw++;
-      m_sample_queue.push(value);
-      ++pushed_samples;
-
-      value = (short)*pw++;
-      m_sample_queue.push(value);
-      ++pushed_samples;
-
-      if (++m_nIndex == m_nSamplesPerSec)
-        m_nIndex = 0;
-    }
-    break;
-  }
-
-  default:
-    ASSERT(0);
-    break;
-
-  } // End of format switch
 
   if (pushed_samples >= m_desired_samples)
   {
@@ -833,7 +754,7 @@ HRESULT CMixer::Receive(IMediaSample *pSample)
 
 } // Receive
 
-HRESULT CMixer::WaitForFrames()
+HRESULT CMixer::WaitForFrames(size_t num_of_bits)
 {
   if (m_bStreaming)
   {
@@ -843,6 +764,13 @@ HRESULT CMixer::WaitForFrames()
       {
         return E_FAIL;
       }
+
+      // Check of bitness changed
+      if (num_of_bits != m_nBitsPerSample)
+      {
+        return E_FAIL;
+      }
+
       std::this_thread::sleep_for(std::chrono::milliseconds(1));
     }
 
@@ -854,7 +782,7 @@ HRESULT CMixer::WaitForFrames()
   }
 }
 
-size_t CMixer::MixShort(std::vector<int16_t>* samples, size_t num_frames)
+size_t CMixer::Mix(std::vector<int16_t>* samples, size_t num_frames)
 {
   if (!samples)
     return 0;
@@ -872,7 +800,7 @@ size_t CMixer::MixShort(std::vector<int16_t>* samples, size_t num_frames)
   while (m_sample_queue.unsafe_size() < m_desired_samples) //&& m_notEOS)
   {
     m_samples_ready = false;
-    if (WaitForFrames() == S_OK)
+    if (WaitForFrames(16) == S_OK)
     {
       all_ok = true;
     }
@@ -890,6 +818,48 @@ size_t CMixer::MixShort(std::vector<int16_t>* samples, size_t num_frames)
       (*samples)[i] = value;
     }
   }
+  // Set EOS samples here
+  effective_samples = m_desired_samples;
+
+  return effective_samples / m_nChannels;
+}
+
+size_t CMixer::Mix(std::vector<int32_t>* samples, size_t num_frames)
+{
+  if (!samples)
+    return 0;
+
+  // 2 = stereo
+  // 6 = 5.1
+  m_desired_samples = num_frames * m_nChannels;
+  samples->resize(m_desired_samples);
+
+  // Wait for queue to fill
+  size_t effective_samples = 0;
+
+  // Still need to check EOS
+  bool all_ok = false;
+  while (m_sample_queue_32bit.unsafe_size() < m_desired_samples) //&& m_notEOS)
+  {
+    m_samples_ready = false;
+    if (WaitForFrames(32) == S_OK)
+    {
+      all_ok = true;
+    }
+    else
+    {
+      break;
+    }
+  }
+
+  for (size_t i = 0; i < m_desired_samples; ++i)
+  {
+    int32_t value = 0;
+    if (m_sample_queue_32bit.try_pop(value))
+    {
+      (*samples)[i] = value;
+    }
+  }
 
   // Set EOS samples here
   effective_samples = m_desired_samples;
@@ -898,18 +868,18 @@ size_t CMixer::MixShort(std::vector<int16_t>* samples, size_t num_frames)
 }
 
 
-  ////////////////////////////////////////////////////////////////////////
-  //
-  // Exported entry points for registration and unregistration 
-  // (in this case they only call through to default implementations).
-  //
-  ////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////
+//
+// Exported entry points for registration and unregistration 
+// (in this case they only call through to default implementations).
+//
+////////////////////////////////////////////////////////////////////////
 
-  //
-  // DllRegisterServer
-  //
-  // Handles DLL registry
-  //
+//
+// DllRegisterServer
+//
+// Handles DLL registry
+//
 STDAPI DllRegisterServer()
 {
   return AMovieDllRegisterServer2(TRUE);

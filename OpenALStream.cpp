@@ -561,6 +561,7 @@ void COpenALStream::SoundLoop()
   ALint state = 0;
 
   std::vector<int16_t> short_data;
+  std::vector<int32_t> long_data;
 
   while (m_run_thread)
   {
@@ -629,7 +630,7 @@ void COpenALStream::SoundLoop()
       {
         if (m_bitness == bit16)
         {
-          available_frames = m_mixer->MixShort(&short_data, frames_per_buffer);
+          available_frames = m_mixer->Mix(&short_data, frames_per_buffer);
 
           if (available_frames < min_frames)
           {
@@ -639,12 +640,24 @@ void COpenALStream::SoundLoop()
           alBufferData(m_buffers[next_buffer], AL_FORMAT_51CHN16, short_data.data(),
             static_cast<ALsizei>(available_frames) * FRAME_SURROUND_SHORT, m_frequency);
         }
+        else if (m_bitness = bit32)
+        {
+          available_frames = m_mixer->Mix(&long_data, frames_per_buffer);
+
+          if (!available_frames)
+          {
+            continue;
+          }
+
+          alBufferData(m_buffers[next_buffer], AL_FORMAT_51CHN32, long_data.data(),
+            static_cast<ALsizei>(available_frames) * FRAME_SURROUND_INT32, m_frequency);
+        }
       }
       else
       {
         if (m_bitness == bit16)
         {
-          available_frames = m_mixer->MixShort(&short_data, frames_per_buffer);
+          available_frames = m_mixer->Mix(&short_data, frames_per_buffer);
 
           if (!available_frames)
           {
@@ -653,6 +666,18 @@ void COpenALStream::SoundLoop()
 
           alBufferData(m_buffers[next_buffer], AL_FORMAT_STEREO16, short_data.data(),
             static_cast<ALsizei>(available_frames) * FRAME_STEREO_SHORT, m_frequency);
+        }
+        else if (m_bitness = bit32)
+        {
+          available_frames = m_mixer->Mix(&long_data, frames_per_buffer);
+
+          if (!available_frames)
+          {
+            continue;
+          }
+
+          alBufferData(m_buffers[next_buffer], AL_FORMAT_STEREO32, long_data.data(),
+            static_cast<ALsizei>(available_frames) * FRAME_STEREO_INT32, m_frequency);
         }
       }
       err = CheckALError(L"buffering data");
