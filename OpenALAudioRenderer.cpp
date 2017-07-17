@@ -131,11 +131,6 @@ COpenALFilter::~COpenALFilter()
   delete m_openal_device;
   m_openal_device = NULL;
 
-  if (m_seeking != nullptr)
-  {
-    m_seeking->Release();
-  }
-
 } // (Destructor)
 
 
@@ -472,12 +467,12 @@ HRESULT CAudioInputPin::SetMediaType(const CMediaType *pmt)
     }
     case 16:
     {
-      m_pFilter->m_openal_device->setBitness(m_pFilter->m_openal_device->bit8);
+      m_pFilter->m_openal_device->setBitness(m_pFilter->m_openal_device->bit16);
       break;
     }
     case 32:
     {
-      m_pFilter->m_openal_device->setBitness(m_pFilter->m_openal_device->bit8);
+      m_pFilter->m_openal_device->setBitness(m_pFilter->m_openal_device->bit32);
       break;
     }
     }

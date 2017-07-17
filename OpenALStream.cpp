@@ -5,8 +5,7 @@
 #ifdef _WIN32
 
 #include <windows.h>
-#include <climits>
-#include <cstring>
+#include <sstream>
 #include <thread>
 #include <array>
 
@@ -356,39 +355,15 @@ void COpenALStream::Destroy()
   alcCloseDevice(device);
 }
 
-ALenum COpenALStream::CheckALError(std::wstring desc)
+ALenum COpenALStream::CheckALError(std::string desc)
 {
   ALenum err = alGetError();
 
   if (err != AL_NO_ERROR)
   {
-    std::wstring type;
-
-    switch (err)
-    {
-    case AL_INVALID_NAME:
-      type = L"AL_INVALID_NAME";
-      break;
-    case AL_INVALID_ENUM:
-      type = L"AL_INVALID_ENUM";
-      break;
-    case AL_INVALID_VALUE:
-      type = L"AL_INVALID_VALUE";
-      break;
-    case AL_INVALID_OPERATION:
-      type = L"AL_INVALID_OPERATION";
-      break;
-    case AL_OUT_OF_MEMORY:
-      type = L"AL_OUT_OF_MEMORY";
-      break;
-    default:
-      type = L"UNKNOWN_ERROR";
-      break;
-    }
-
-    wchar_t string_buf[1024] = { 0 };
-    swprintf_s(string_buf, sizeof(string_buf), L"Error %s: %08x %s\n", desc.c_str(), err, type.c_str());
-    OutputDebugString(string_buf);
+    std::ostringstream string_stream;
+    string_stream << "Error " << desc.c_str() << ": " << alGetString(err) << "\n";
+    OutputDebugStringA(string_stream.str().c_str());
   }
 
   return err;
@@ -544,11 +519,11 @@ void COpenALStream::SoundLoop()
 
   // Generate some AL Buffers for streaming
   alGenBuffers(OAL_BUFFERS, (ALuint*)m_buffers.data());
-  err = CheckALError(L"generating buffers");
+  err = CheckALError("generating buffers");
 
   // Generate a Source to playback the Buffers
   alGenSources(1, &m_source);
-  err = CheckALError(L"generating sources");
+  err = CheckALError("generating sources");
 
   // Set the default sound volume as saved in the config file.
   alSourcef(m_source, AL_GAIN, m_volume);
@@ -576,7 +551,7 @@ void COpenALStream::SoundLoop()
 
         alDeleteBuffers(OAL_BUFFERS, m_buffers.data());
         alGenBuffers(OAL_BUFFERS, (ALuint*)m_buffers.data());
-        err = CheckALError(L"re-generating buffers");
+        err = CheckALError("re-generating buffers");
 
         next_buffer = 0;
         num_buffers_queued = 0;
@@ -615,7 +590,7 @@ void COpenALStream::SoundLoop()
       {
         std::array<ALuint, OAL_BUFFERS> unqueued_buffer_ids;
         alSourceUnqueueBuffers(m_source, num_buffers_processed, unqueued_buffer_ids.data());
-        err = CheckALError(L"unqueuing buffers");
+        err = CheckALError("unqueuing buffers");
 
         num_buffers_queued -= num_buffers_processed;
       }
@@ -680,10 +655,10 @@ void COpenALStream::SoundLoop()
             static_cast<ALsizei>(available_frames) * FRAME_STEREO_INT32, m_frequency);
         }
       }
-      err = CheckALError(L"buffering data");
+      err = CheckALError("buffering data");
 
       alSourceQueueBuffers(m_source, 1, &m_buffers[next_buffer]);
-      err = CheckALError(L"queuing buffers");
+      err = CheckALError("queuing buffers");
 
       num_buffers_queued++;
       next_buffer = (next_buffer + 1) % OAL_BUFFERS;
@@ -693,8 +668,8 @@ void COpenALStream::SoundLoop()
       {
         // Buffer underrun occurred, resume playback
         alSourcePlay(m_source);
-        err = CheckALError(L"occurred resuming playback");
-        OutputDebugString(L"Buffer underrun\n");
+        err = CheckALError("occurred resuming playback");
+        OutputDebugStringA("Buffer underrun\n");
       }
     }
     else
