@@ -4,14 +4,12 @@
 
 #pragma once
 
-#include <vector>
-#include <thread>
-#include <concurrent_queue.h>
-
 #include <include/OpenAL/al.h>
 #include <include/OpenAL/alc.h>
 
+#ifndef __STREAMS__
 #include "streams.h"
+#endif
 
 // From AL_EXT_float32
 #ifndef AL_FORMAT_STEREO_FLOAT32
@@ -33,7 +31,7 @@
 #endif
 
 // OpenAL requires a minimum of two buffers, three or more recommended
-const size_t OAL_BUFFERS = 3;
+const size_t OAL_BUFFERS = 2;
 const size_t STEREO_CHANNELS = 2;
 const size_t SURROUND_CHANNELS = 6;  // number of channels in surround mode
 const size_t SIZE_SHORT = 2;
@@ -117,7 +115,7 @@ private:
   void Destroy();
   ALenum CheckALError(std::string desc);
 
-  uint32_t num_buffers = 3;
+  uint32_t num_buffers = OAL_BUFFERS;
 
   std::vector<ALuint> m_buffers;
   ALuint m_source = 0;
@@ -129,7 +127,7 @@ private:
   uint32_t m_frequency = 48000;
 
   // Get from settings
-  uint32_t m_latency = 30;
+  uint32_t m_latency = 48;
   bool m_muted = false;
 
   // Clocking variables and functions

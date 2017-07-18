@@ -11,13 +11,11 @@
 //------------------------------------------------------------------------------
 
 #include <streams.h>
-#include <commctrl.h>
-#include <mmsystem.h>
 #include <initguid.h>
-#include <wxdebug.h>
+#include <sstream>
+
 #include "OpenALAudioRenderer.h"
 #include "OpenALStream.h"
-#include <strsafe.h>
 
 // Setup data
 
@@ -690,6 +688,10 @@ void CMixer::CopyWaveform(IMediaSample *pMediaSample)
 
   // Locking between inbound samples and the mixer
   m_rendered_samples = pushed_samples;
+
+  //std::ostringstream string;
+  //string << "Size of the queue: " << pushed_samples / m_nChannels << " frames.\n";
+  //OutputDebugStringA(string.str().c_str());
 
   m_samples_ready = true;
   m_samples_ready_cv.notify_one();

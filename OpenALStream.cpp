@@ -7,7 +7,7 @@
 #include <windows.h>
 #include <sstream>
 #include <thread>
-#include <array>
+#include <vector>
 
 #include "OpenALStream.h"
 #include "OpenALAudioRenderer.h"
@@ -353,7 +353,7 @@ void COpenALStream::Destroy()
   // Clean up buffers and sources
   alDeleteSources(1, &m_source);
   m_source = 0;
-  alDeleteBuffers(OAL_BUFFERS, m_buffers.data());
+  alDeleteBuffers(num_buffers, m_buffers.data());
 
   ALCcontext* context = alcGetCurrentContext();
   ALCdevice* device = alcGetContextsDevice(context);
@@ -502,16 +502,16 @@ void COpenALStream::SoundLoop()
   // Can't have zero samples per buffer
   if (m_latency > 0)
   {
-    frames_per_buffer = m_frequency / 1000 * m_latency / OAL_BUFFERS;
+    frames_per_buffer = m_frequency / 1000 * m_latency / num_buffers;
   }
   else
   {
-    frames_per_buffer = m_frequency / 1000 * 1 / OAL_BUFFERS;
+    frames_per_buffer = m_frequency / 1000 * 1 / num_buffers;
   }
 
   std::ostringstream string;
-  string << "Using " << OAL_BUFFERS << " buffers, each with " << frames_per_buffer <<
-            " audio frames for a total of " << frames_per_buffer * OAL_BUFFERS << " frames.\n";
+  string << "Using " << num_buffers << " buffers, each with " << frames_per_buffer <<
+            " audio frames for a total of " << frames_per_buffer * num_buffers << " frames.\n";
   OutputDebugStringA(string.str().c_str());
 
   // Should we make these larger just in case the mixer ever sends more samples
@@ -523,7 +523,7 @@ void COpenALStream::SoundLoop()
   ALenum err = alGetError();
 
   // Generate some AL Buffers for streaming
-  alGenBuffers(OAL_BUFFERS, (ALuint*)m_buffers.data());
+  alGenBuffers(num_buffers, (ALuint*)m_buffers.data());
   err = CheckALError("generating buffers");
 
   // Generate a Source to playback the Buffers
@@ -554,8 +554,8 @@ void COpenALStream::SoundLoop()
         alSourceStop(m_source);
         alSourcei(m_source, AL_BUFFER, 0);
 
-        alDeleteBuffers(OAL_BUFFERS, m_buffers.data());
-        alGenBuffers(OAL_BUFFERS, (ALuint*)m_buffers.data());
+        alDeleteBuffers(num_buffers, m_buffers.data());
+        alGenBuffers(num_buffers, (ALuint*)m_buffers.data());
         err = CheckALError("re-generating buffers");
 
         next_buffer = 0;
@@ -563,11 +563,11 @@ void COpenALStream::SoundLoop()
 
         if (m_latency > 0)
         {
-          frames_per_buffer = m_frequency / 1000 * m_latency / OAL_BUFFERS;
+          frames_per_buffer = m_frequency / 1000 * m_latency / num_buffers;
         }
         else
         {
-          frames_per_buffer = m_frequency / 1000 * 1 / OAL_BUFFERS;
+          frames_per_buffer = m_frequency / 1000 * 1 / num_buffers;
         }
 
         past_frequency = m_frequency;
@@ -579,7 +579,7 @@ void COpenALStream::SoundLoop()
       int num_buffers_processed = 0;
       alGetSourcei(m_source, AL_BUFFERS_PROCESSED, &num_buffers_processed);
       alGetSourcei(m_source, AL_SOURCE_STATE, &state);
-      if ((num_buffers_queued == OAL_BUFFERS && !num_buffers_processed) || state == AL_PAUSED)
+      if ((num_buffers_queued == num_buffers && !num_buffers_processed) || state == AL_PAUSED)
       {
         std::this_thread::sleep_for(std::chrono::milliseconds(1));
         continue;
@@ -588,7 +588,7 @@ void COpenALStream::SoundLoop()
       // Remove the Buffer from the Queue.
       if (num_buffers_processed)
       {
-        std::array<ALuint, OAL_BUFFERS> unqueued_buffer_ids;
+        std::vector<ALuint> unqueued_buffer_ids(num_buffers);
         alSourceUnqueueBuffers(m_source, num_buffers_processed, unqueued_buffer_ids.data());
         err = CheckALError("unqueuing buffers");
 
@@ -659,7 +659,7 @@ void COpenALStream::SoundLoop()
       err = CheckALError("queuing buffers");
 
       num_buffers_queued++;
-      next_buffer = (next_buffer + 1) % OAL_BUFFERS;
+      next_buffer = (next_buffer + 1) % num_buffers;
 
       alGetSourcei(m_source, AL_SOURCE_STATE, &state);
       if (state != AL_PLAYING)

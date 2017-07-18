@@ -8,7 +8,6 @@
 
 #include <concurrent_queue.h>
 #include <vector>
-#include <mutex>
 #include <condition_variable>
 #include <comdef.h>
 
