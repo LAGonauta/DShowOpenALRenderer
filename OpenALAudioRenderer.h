@@ -34,6 +34,9 @@ private:
   COpenALFilter *m_pFilter;         // The filter that owns us
   CCritSec m_receiveMutex;
 
+  std::atomic<bool> m_startEOS = false;
+  std::atomic<bool> m_stopEOS = false;
+
 public:
 
   CAudioInputPin(COpenALFilter *pTextOutFilter,
@@ -59,6 +62,7 @@ public:
   // Here's the next block of data from the stream.
   // AddRef it if you are going to hold onto it
   STDMETHODIMP Receive(IMediaSample* pSample) override;
+  STDMETHODIMP EndOfStream() override;
   STDMETHODIMP ReceiveCanBlock() override;
 
 }; // CAudioInputPin

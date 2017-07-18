@@ -27,7 +27,6 @@ const AMOVIESETUP_MEDIATYPE sudPinTypes =
   &MEDIASUBTYPE_NULL          // Minor type
 };
 
-
 const AMOVIESETUP_PIN sudPins =
 {
   L"Input",                   // Pin string name
@@ -40,7 +39,6 @@ const AMOVIESETUP_PIN sudPins =
   1,                          // Number of pins types
   &sudPinTypes };             // Pin information
 
-
 const AMOVIESETUP_FILTER sudOALRend =
 {
   &CLSID_OALRend,             // Filter CLSID
@@ -49,7 +47,6 @@ const AMOVIESETUP_FILTER sudOALRend =
   1,                          // Number pins
   &sudPins                    // Pin details
 };
-
 
 // List of class IDs and creator functions for class factory
 
@@ -108,11 +105,11 @@ COpenALFilter::~COpenALFilter()
 
   ASSERT(m_pInputPin);
   delete m_pInputPin;
-  m_pInputPin = NULL;
+  m_pInputPin = nullptr;
 
   ASSERT(m_openal_device);
   delete m_openal_device;
-  m_openal_device = NULL;
+  m_openal_device = nullptr;
 
 } // (Destructor)
 
@@ -374,7 +371,7 @@ HRESULT CAudioInputPin::CheckOpenALMediaType(const WAVEFORMATEX* wave_format)
     }
     else
     {
-      return E_INVALIDARG;
+      return S_FALSE;
     }
     break;
   }
@@ -387,7 +384,7 @@ HRESULT CAudioInputPin::CheckOpenALMediaType(const WAVEFORMATEX* wave_format)
     }
     else
     {
-      return E_INVALIDARG;
+      return S_FALSE;
     }
     break;
   }
@@ -400,7 +397,7 @@ HRESULT CAudioInputPin::CheckOpenALMediaType(const WAVEFORMATEX* wave_format)
     }
     else
     {
-      return E_INVALIDARG;
+      return S_FALSE;
     }
     break;
   }
@@ -413,7 +410,7 @@ HRESULT CAudioInputPin::CheckOpenALMediaType(const WAVEFORMATEX* wave_format)
     }
     else
     {
-      return E_INVALIDARG;
+      return S_FALSE;
     }
     break;
   }
@@ -426,7 +423,7 @@ HRESULT CAudioInputPin::CheckOpenALMediaType(const WAVEFORMATEX* wave_format)
     }
     else
     {
-      return E_INVALIDARG;
+      return S_FALSE;
     }
     break;
   }
@@ -443,7 +440,7 @@ HRESULT CAudioInputPin::CheckOpenALMediaType(const WAVEFORMATEX* wave_format)
     }
     else
     {
-      return E_INVALIDARG;
+      return S_FALSE;
     }
     break;
   }
@@ -456,7 +453,7 @@ HRESULT CAudioInputPin::CheckOpenALMediaType(const WAVEFORMATEX* wave_format)
     }
     else
     {
-      return E_INVALIDARG;
+      return S_FALSE;
     }
     break;
   }
@@ -471,7 +468,7 @@ HRESULT CAudioInputPin::CheckOpenALMediaType(const WAVEFORMATEX* wave_format)
       }
       else
       {
-        return E_INVALIDARG;
+        return S_FALSE;
       }
     }
     else
@@ -483,14 +480,14 @@ HRESULT CAudioInputPin::CheckOpenALMediaType(const WAVEFORMATEX* wave_format)
       }
       else
       {
-        return E_INVALIDARG;
+        return S_FALSE;
       }
     }
     break;
   }
   }
 
-  return NOERROR;
+  return S_OK;
 }
 
 //
@@ -506,23 +503,23 @@ HRESULT CAudioInputPin::CheckMediaType(const CMediaType *pmt)
 
   if (pwfx == nullptr)
   {
-    return E_INVALIDARG;
+    return S_FALSE;
   }
 
   // Reject non-PCM or float Audio type
   if (pmt->majortype != MEDIATYPE_Audio)
   {
-    return E_INVALIDARG;
+    return S_FALSE;
   }
 
   if (pmt->formattype != FORMAT_WaveFormatEx)
   {
-    return E_INVALIDARG;
+    return S_FALSE;
   }
 
   if (pwfx->wFormatTag != WAVE_FORMAT_PCM && pwfx->wFormatTag != WAVE_FORMAT_EXTENSIBLE && pwfx->wFormatTag != WAVE_FORMAT_IEEE_FLOAT)
   {
-    return E_INVALIDARG;
+    return S_FALSE;
   }
 
   m_pFilter->m_mixer.m_is_float = (pwfx->wFormatTag == WAVE_FORMAT_IEEE_FLOAT);
@@ -534,7 +531,7 @@ HRESULT CAudioInputPin::CheckMediaType(const CMediaType *pmt)
     return hr;
   }
 
-  return NOERROR;
+  return S_OK;
 
 } // CheckMediaType
 
@@ -565,7 +562,7 @@ HRESULT CAudioInputPin::SetMediaType(const CMediaType *pmt)
     auto hrr = CheckOpenALMediaType(pwf);
     if (FAILED(hrr))
     {
-      return hrr;
+      //return hrr;
     }
   }
 
@@ -652,6 +649,14 @@ HRESULT CAudioInputPin::Receive(IMediaSample * pSample)
 
 } // Receive
 
+STDMETHODIMP CAudioInputPin::EndOfStream()
+{
+  //m_pFilter->m_flush = true;
+
+  m_pFilter->NotifyEvent(EC_COMPLETE, S_OK, (LONG_PTR)m_pFilter);
+  return S_OK;
+}
+
 STDMETHODIMP CAudioInputPin::ReceiveCanBlock()
 {
   return S_OK;
@@ -663,7 +668,7 @@ STDMETHODIMP CAudioInputPin::ReceiveCanBlock()
 CMixer::CMixer(TCHAR *pName, COpenALFilter *pRenderer, HRESULT *phr) :
   m_hInstance(g_hInst),
   m_pRenderer(pRenderer),
-  m_bStreaming(FALSE),
+  m_bStreaming(false),
   m_LastMediaSampleSize(0)
 {
   ASSERT(m_pRenderer);
@@ -694,12 +699,12 @@ HRESULT CMixer::StartStreaming()
 
   // Are we already streaming
 
-  if (m_bStreaming == TRUE)
+  if (m_bStreaming == true)
   {
     return NOERROR;
   }
 
-  m_bStreaming = TRUE;
+  m_bStreaming = true;
   return NOERROR;
 
 } // StartStreaming
@@ -716,12 +721,12 @@ HRESULT CMixer::StopStreaming()
 
   // Have we been stopped already
 
-  if (m_bStreaming == FALSE)
+  if (m_bStreaming == false)
   {
     return NOERROR;
   }
 
-  m_bStreaming = FALSE;
+  m_bStreaming = false;
   return NOERROR;
 
 } // StopStreaming
@@ -855,7 +860,7 @@ HRESULT CMixer::Receive(IMediaSample *pSample)
 {
   CheckPointer(pSample, E_POINTER);
   CAutoLock cAutoLock(this);
-  ASSERT(pSample != NULL);
+  ASSERT(pSample != nullptr);
 
   REFERENCE_TIME tStart, tStop;
   pSample->GetTime(&tStart, &tStop);
@@ -864,7 +869,7 @@ HRESULT CMixer::Receive(IMediaSample *pSample)
   if ((m_LastMediaSampleSize = pSample->GetActualDataLength()) == 0)
     return NOERROR;
 
-  if (m_bStreaming == TRUE)
+  if (m_bStreaming == true)
   {
     CopyWaveform(pSample);     // Copy data to our circular buffer
 

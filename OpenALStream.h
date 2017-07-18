@@ -4,6 +4,8 @@
 
 #pragma once
 
+#include <atomic>
+
 #include <include/OpenAL/al.h>
 #include <include/OpenAL/alc.h>
 
@@ -100,7 +102,7 @@ public:
 
   // We must make this time depend on the sound card buffers latter,
   // not on the system clock
-  REFERENCE_TIME GetPrivateTime() override;
+  //REFERENCE_TIME GetPrivateTime() override;
   //HRESULT SetTimeDelta(const REFERENCE_TIME &TimeDelta);
 
   void SetSyncSource(IReferenceClock *pClock);
@@ -123,7 +125,6 @@ public:
   STDMETHODIMP get_Balance(long* pBalance) override;
   long m_fake_balance = 0;
 
-  HRESULT Pause();
   HRESULT Stop();
   HRESULT setSpeakerLayout(SpeakerLayout layout);
   SpeakerLayout getSpeakerLayout();
@@ -136,7 +137,7 @@ public:
 
 private:
   std::thread m_thread;
-  bool m_run_thread = false;
+  std::atomic<bool> m_run_thread = false;
 
   void SoundLoop();
   void SetVolume(int volume);
@@ -147,12 +148,12 @@ private:
 
   std::vector<ALuint> m_buffers;
   ALuint m_source = 0;
-  ALfloat m_volume = 1.0f;
+  std::atomic<ALfloat> m_volume = 1.0f;
 
   CMixer* m_mixer;
-  SpeakerLayout m_speaker_layout = Surround6;
-  MediaBitness m_bitness = bit16;
-  uint32_t m_frequency = 48000;
+  std::atomic<SpeakerLayout> m_speaker_layout = Surround6;
+  std::atomic<MediaBitness> m_bitness = bit16;
+  std::atomic<uint32_t> m_frequency = 48000;
 
   // Get from settings
   uint32_t m_latency = 48;

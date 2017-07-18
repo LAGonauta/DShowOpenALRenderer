@@ -15,6 +15,12 @@
 COpenALStream::~COpenALStream(void)
 {
   CloseDevice();
+
+  // Finally Terminate thread
+  if (m_thread.joinable())
+  {
+    m_thread.join();
+  }
 }
 
 COpenALStream::COpenALStream(CMixer* audioMixer, LPUNKNOWN pUnk, HRESULT * phr)
@@ -50,34 +56,34 @@ COpenALStream::COpenALStream(CMixer* audioMixer, LPUNKNOWN pUnk, HRESULT * phr)
   DbgLog((LOG_TRACE, 1, TEXT("Creating clock at ref tgt=%d"), m_LastTickTime));
 }
 
-REFERENCE_TIME COpenALStream::GetPrivateTime()
-{
-  CAutoLock cObjectLock(this);
-
-  /* If the clock has wrapped then the current time will be less than
-  * the last time we were notified so add on the extra milliseconds
-  *
-  * The time period is long enough so that the likelihood of
-  * successive calls spanning the clock cycle is not considered.
-  */
-
-  // This returns the current time in ms according to our special clock.  If
-  // we used timeGetTime() here, our clock would run normally.
-  //DWORD dwTime = MetGetTime();
-  DWORD dwTime = timeGetTime();
-  {
-    REFERENCE_TIME delta = REFERENCE_TIME(dwTime) - REFERENCE_TIME(m_dwPrevSystemTime);
-    if (dwTime < m_dwPrevSystemTime)
-      delta += REFERENCE_TIME(UINT_MAX) + 1;
-
-    m_dwPrevSystemTime = dwTime;
-
-    delta *= (UNITS / MILLISECONDS);
-    m_rtPrivateTime += delta;
-  }
-
-  return m_rtPrivateTime;
-}
+//REFERENCE_TIME COpenALStream::GetPrivateTime()
+//{
+//  CAutoLock cObjectLock(this);
+//
+//  /* If the clock has wrapped then the current time will be less than
+//  * the last time we were notified so add on the extra milliseconds
+//  *
+//  * The time period is long enough so that the likelihood of
+//  * successive calls spanning the clock cycle is not considered.
+//  */
+//
+//  // This returns the current time in ms according to our special clock.  If
+//  // we used timeGetTime() here, our clock would run normally.
+//  //DWORD dwTime = MetGetTime();
+//  DWORD dwTime = timeGetTime();
+//  {
+//    REFERENCE_TIME delta = REFERENCE_TIME(dwTime) - REFERENCE_TIME(m_dwPrevSystemTime);
+//    if (dwTime < m_dwPrevSystemTime)
+//      delta += REFERENCE_TIME(UINT_MAX) + 1;
+//
+//    m_dwPrevSystemTime = dwTime;
+//
+//    delta *= (UNITS / MILLISECONDS);
+//    m_rtPrivateTime += delta;
+//  }
+//
+//  return m_rtPrivateTime;
+//}
 
 void COpenALStream::SetSyncSource(IReferenceClock * pClock)
 {
@@ -271,6 +277,12 @@ STDMETHODIMP COpenALStream::StartDevice(void)
 {
   if (m_run_thread == false)
   {
+    // Terminate older thread, if it exists
+    if (m_thread.joinable())
+    {
+      m_thread.join();
+    }
+
     m_run_thread = true;
     m_thread = std::thread(&COpenALStream::SoundLoop, this);
   }
@@ -281,10 +293,6 @@ STDMETHODIMP COpenALStream::StartDevice(void)
 STDMETHODIMP COpenALStream::StopDevice(void)
 {
   m_run_thread = false;
-  if (m_thread.joinable())
-  {
-    m_thread.join();
-  }
 
   return S_OK;
 }
@@ -304,18 +312,18 @@ STDMETHODIMP COpenALStream::put_Volume(long volume)
   return S_OK;
 }
 
-STDMETHODIMP COpenALStream::get_Volume(long * pVolume)
+STDMETHODIMP COpenALStream::get_Volume(long* pVolume)
 {
   CheckPointer(pVolume, E_POINTER);
 
-  float* f = &m_volume;
+  float f = m_volume;
   if (alIsSource(m_source))
   {
-    alGetSourcef(m_source, AL_GAIN, f);
+    alGetSourcef(m_source, AL_GAIN, &f);
   }
 
-  *pVolume = (*f == 1.0f) ?
-    0 : (long)(log10(*f) * 2000.0f);
+  *pVolume = (f == 1.0f) ?
+    0 : (long)(log10(f) * 2000.0f);
 
   ASSERT(*pVolume <= 0 && *pVolume >= -10000);
 
@@ -347,20 +355,27 @@ STDMETHODIMP COpenALStream::get_Balance(long* pBalance)
 
 void COpenALStream::Destroy()
 {
-  alSourceStop(m_source);
-  alSourcei(m_source, AL_BUFFER, 0);
-
-  // Clean up buffers and sources
-  alDeleteSources(1, &m_source);
-  m_source = 0;
-  alDeleteBuffers(num_buffers, m_buffers.data());
-
   ALCcontext* context = alcGetCurrentContext();
-  ALCdevice* device = alcGetContextsDevice(context);
 
-  alcMakeContextCurrent(nullptr);
-  alcDestroyContext(context);
-  alcCloseDevice(device);
+  if (context != nullptr)
+  {
+    if (alIsSource(m_source))
+    {
+      alSourceStop(m_source);
+      alSourcei(m_source, AL_BUFFER, 0);
+
+      // Clean up buffers and sources
+      alDeleteSources(1, &m_source);
+      m_source = 0;
+      alDeleteBuffers(num_buffers, m_buffers.data());
+    }
+
+    ALCdevice* device = alcGetContextsDevice(context);
+
+    alcMakeContextCurrent(nullptr);
+    alcDestroyContext(context);
+    alcCloseDevice(device);
+  }
 }
 
 ALenum COpenALStream::CheckALError(std::string desc)
@@ -375,23 +390,6 @@ ALenum COpenALStream::CheckALError(std::string desc)
   }
 
   return err;
-}
-
-HRESULT COpenALStream::Pause()
-{
-  ALint state = 0;
-  alGetSourcei(m_source, AL_SOURCE_STATE, &state);
-  if (state == AL_PAUSED)
-  {
-    return S_OK;
-  }
-  else if (state == AL_PLAYING)
-  {
-    alSourcePause(m_source);
-    return S_OK;
-  }
-
-  return E_FAIL;
 }
 
 HRESULT COpenALStream::Stop()
@@ -623,7 +621,7 @@ void COpenALStream::SoundLoop()
       int num_buffers_processed = 0;
       alGetSourcei(m_source, AL_BUFFERS_PROCESSED, &num_buffers_processed);
       alGetSourcei(m_source, AL_SOURCE_STATE, &state);
-      if ((num_buffers_queued == num_buffers && !num_buffers_processed) || state == AL_PAUSED)
+      if (num_buffers_queued == num_buffers && !num_buffers_processed)
       {
         std::this_thread::sleep_for(std::chrono::milliseconds(1));
         continue;
@@ -796,7 +794,7 @@ void COpenALStream::SoundLoop()
     }
     else
     {
-      std::this_thread::sleep_for(std::chrono::milliseconds(30));
+      std::this_thread::sleep_for(std::chrono::milliseconds(1));
     }
   }
 }
