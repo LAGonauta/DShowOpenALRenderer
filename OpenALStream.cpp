@@ -484,6 +484,48 @@ static bool IsCreativeXFi()
   return strstr(alGetString(AL_RENDERER), "X-Fi") != nullptr;
 }
 
+std::vector<COpenALStream::MediaBitness> COpenALStream::getSupportedBitness()
+{
+  std::vector<MediaBitness> supported_bitness;
+
+  bool float32_capable = alIsExtensionPresent("AL_EXT_float32") != 0;
+  bool fixed32_capable = IsCreativeXFi();
+
+  if (float32_capable)
+  {
+    //supported_bitness.push_back(bitfloat);
+  }
+
+  if (fixed32_capable)
+  {
+    supported_bitness.push_back(bit32);
+  }
+
+  // All implementation support 16-bit and 8-bit
+  supported_bitness.push_back(bit16);
+  //supported_bitness.push_back(bit8);
+
+  return supported_bitness;
+}
+
+std::vector<COpenALStream::SpeakerLayout> COpenALStream::getSupportedSpeakerLayout()
+{
+  std::vector<SpeakerLayout> supported_layouts;
+  bool surround_capable = alIsExtensionPresent("AL_EXT_MCFORMATS") || IsCreativeXFi();
+
+  if (surround_capable)
+  {
+    //supported_layouts.push_back(Surround8);
+    supported_layouts.push_back(Surround6);
+  }
+
+  //supported_layouts.push_back(Quad);
+  supported_layouts.push_back(Stereo);
+  //supported_layouts.push_back(Mono);
+
+  return supported_layouts;
+}
+
 void COpenALStream::SoundLoop()
 {
   uint32_t past_frequency = m_frequency;

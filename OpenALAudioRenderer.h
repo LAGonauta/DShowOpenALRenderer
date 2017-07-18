@@ -30,6 +30,7 @@ class CAudioInputPin : public CCritSec, public CBaseInputPin
 
 private:
 
+  HRESULT CheckOpenALMediaType(const WAVEFORMATEX* wave_format);
   COpenALFilter *m_pFilter;         // The filter that owns us
   CCritSec m_receiveMutex;
 
@@ -44,10 +45,10 @@ public:
   HRESULT BreakConnect();
 
   // Check that we can support this input type
-  HRESULT CheckMediaType(const CMediaType *pmt) override;
+  HRESULT CheckMediaType(const CMediaType* pmt) override;
 
   // Actually set the current format
-  HRESULT SetMediaType(const CMediaType *pmt) override;
+  HRESULT SetMediaType(const CMediaType* pmt) override;
 
   // IMemInputPin virtual methods
 
@@ -57,7 +58,7 @@ public:
 
   // Here's the next block of data from the stream.
   // AddRef it if you are going to hold onto it
-  STDMETHODIMP Receive(IMediaSample *pSample) override;
+  STDMETHODIMP Receive(IMediaSample* pSample) override;
   STDMETHODIMP ReceiveCanBlock() override;
 
 }; // CAudioInputPin
@@ -87,7 +88,7 @@ class CMixer : public CCritSec
 private:
 
   HINSTANCE m_hInstance;          // Global module instance handle
-  COpenALFilter *m_pRenderer;      // The owning renderer object
+  COpenALFilter* m_pRenderer;      // The owning renderer object
 
   std::atomic<bool> m_bStreaming;              // Are we currently streaming
 

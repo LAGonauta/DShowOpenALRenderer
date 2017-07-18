@@ -104,10 +104,11 @@ public:
   uint32_t getFrequency();
   HRESULT setBitness(MediaBitness bitness);
   MediaBitness getBitness();
+  std::vector<MediaBitness> getSupportedBitness();
+  std::vector<SpeakerLayout> getSupportedSpeakerLayout();
 
 private:
   std::thread m_thread;
-  bool m_pin_locked = false;
   bool m_run_thread = false;
 
   void SoundLoop();
