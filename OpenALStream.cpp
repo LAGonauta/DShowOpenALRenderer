@@ -12,6 +12,90 @@
 #include "OpenALStream.h"
 #include "OpenALAudioRenderer.h"
 
+static HMODULE s_openal_dll = nullptr;
+
+#define OPENAL_API_VISIT(X)                                                                        \
+  X(alBufferData)                                                                                  \
+  X(alcCloseDevice)                                                                                \
+  X(alcCreateContext)                                                                              \
+  X(alcDestroyContext)                                                                             \
+  X(alcGetContextsDevice)                                                                          \
+  X(alcGetCurrentContext)                                                                          \
+  X(alcGetString)                                                                                  \
+  X(alcIsExtensionPresent)                                                                         \
+  X(alcMakeContextCurrent)                                                                         \
+  X(alcOpenDevice)                                                                                 \
+  X(alDeleteBuffers)                                                                               \
+  X(alDeleteSources)                                                                               \
+  X(alGenBuffers)                                                                                  \
+  X(alGenSources)                                                                                  \
+  X(alGetError)                                                                                    \
+  X(alGetSourcei)                                                                                  \
+  X(alGetString)                                                                                   \
+  X(alIsExtensionPresent)                                                                          \
+  X(alSourcef)                                                                                     \
+  X(alSourcei)                                                                                     \
+  X(alSourcePlay)                                                                                  \
+  X(alSourceQueueBuffers)                                                                          \
+  X(alSourceStop)                                                                                  \
+  X(alSourceUnqueueBuffers)                                                                        \
+  X(alGetEnumValue)                                                                                \
+  X(alIsSource)                                                                                    \
+  X(alGetSourcef)
+
+// Create func_t function pointer type and declare a nullptr-initialized static variable of that
+// type named "pfunc".
+#define DYN_FUNC_DECLARE(func)                                                                     \
+  typedef decltype(&func) func##_t;                                                                \
+  static func##_t p##func = nullptr;
+
+// Attempt to load the function from the given module handle.
+#define OPENAL_FUNC_LOAD(func)                                                                     \
+  p##func = (func##_t)::GetProcAddress(s_openal_dll, #func);                                       \
+  if (!p##func)                                                                                    \
+  {                                                                                                \
+    return false;                                                                                  \
+  }
+
+OPENAL_API_VISIT(DYN_FUNC_DECLARE);
+
+static bool InitFunctions()
+{
+  OPENAL_API_VISIT(OPENAL_FUNC_LOAD);
+  return true;
+}
+
+static bool InitLibrary()
+{
+  if (s_openal_dll)
+    return true;
+
+  s_openal_dll = ::LoadLibrary(TEXT("openal32.dll"));
+  if (!s_openal_dll)
+    return false;
+
+  if (!InitFunctions())
+  {
+    ::FreeLibrary(s_openal_dll);
+    s_openal_dll = nullptr;
+    return false;
+  }
+
+  return true;
+}
+
+STDMETHODIMP COpenALStream::isValid()
+{
+  if (InitLibrary())
+  {
+    return S_OK;
+  }
+  else
+  {
+    return E_FAIL;
+  }
+}
+
 COpenALStream::~COpenALStream(void)
 {
   CloseDevice();
@@ -28,6 +112,8 @@ COpenALStream::COpenALStream(CMixer* audioMixer, LPUNKNOWN pUnk, HRESULT * phr)
   CBasicAudio(L"OpenAL Volume Setting", pUnk),
   m_pCurrentRefClock(0), m_pPrevRefClock(0)
 {
+  EXECUTE_ASSERT(SUCCEEDED(isValid()));
+
   EXECUTE_ASSERT(SUCCEEDED(OpenDevice()));
 
   m_mixer = audioMixer;
@@ -205,7 +291,7 @@ std::vector<std::string> GetAllDevices()
 {
   std::vector<std::string> devices_names_list;
   ALint device_index = 0;
-  const ALchar* device_names = alcGetString(nullptr, ALC_ALL_DEVICES_SPECIFIER);
+  const ALchar* device_names = palcGetString(nullptr, ALC_ALL_DEVICES_SPECIFIER);
 
   while (device_names && *device_names)
   {
@@ -220,13 +306,13 @@ std::vector<std::string> GetAllDevices()
 
 STDMETHODIMP COpenALStream::OpenDevice(void)
 {
-  if (!alcIsExtensionPresent(nullptr, "ALC_ENUMERATION_EXT"))
+  if (!palcIsExtensionPresent(nullptr, "ALC_ENUMERATION_EXT"))
   {
     OutputDebugStringA("OpenAL: can't find sound devices\n");
     return E_FAIL;
   }
 
-  const char* default_device = alcGetString(nullptr, ALC_DEFAULT_DEVICE_SPECIFIER);
+  const char* default_device = palcGetString(nullptr, ALC_DEFAULT_DEVICE_SPECIFIER);
 
   if (!strlen(default_device))
   {
@@ -242,7 +328,7 @@ STDMETHODIMP COpenALStream::OpenDevice(void)
     OutputDebugStringA(string.str().c_str());
   }
 
-  ALCdevice* device = alcOpenDevice(devices[0].c_str());
+  ALCdevice* device = palcOpenDevice(devices[0].c_str());
   if (!device)
   {
     std::ostringstream string;
@@ -251,17 +337,17 @@ STDMETHODIMP COpenALStream::OpenDevice(void)
     return E_FAIL;
   }
 
-  ALCcontext* context = alcCreateContext(device, nullptr);
+  ALCcontext* context = palcCreateContext(device, nullptr);
   if (!context)
   {
-    alcCloseDevice(device);
+    palcCloseDevice(device);
     std::ostringstream string;
     string << "OpenAL: can't create context for device " << devices[0].c_str() << "\n";
     OutputDebugStringA(string.str().c_str());
     return E_FAIL;
   }
 
-  alcMakeContextCurrent(context);
+  palcMakeContextCurrent(context);
   return S_OK;
 }
 
@@ -307,7 +393,7 @@ STDMETHODIMP COpenALStream::put_Volume(long volume)
     1.0f : pow(10.0f, (float)volume / 2000.0f);
 
   m_volume = f;
-  alSourcef(m_source, AL_GAIN, m_volume);
+  palSourcef(m_source, AL_GAIN, m_volume);
 
   return S_OK;
 }
@@ -317,9 +403,9 @@ STDMETHODIMP COpenALStream::get_Volume(long* pVolume)
   CheckPointer(pVolume, E_POINTER);
 
   float f = m_volume;
-  if (alIsSource(m_source))
+  if (palIsSource(m_source))
   {
-    alGetSourcef(m_source, AL_GAIN, &f);
+    palGetSourcef(m_source, AL_GAIN, &f);
   }
 
   *pVolume = (f == 1.0f) ?
@@ -355,37 +441,37 @@ STDMETHODIMP COpenALStream::get_Balance(long* pBalance)
 
 void COpenALStream::Destroy()
 {
-  ALCcontext* context = alcGetCurrentContext();
+  ALCcontext* context = palcGetCurrentContext();
 
   if (context != nullptr)
   {
-    if (alIsSource(m_source))
+    if (palIsSource(m_source))
     {
-      alSourceStop(m_source);
-      alSourcei(m_source, AL_BUFFER, 0);
+      palSourceStop(m_source);
+      palSourcei(m_source, AL_BUFFER, 0);
 
       // Clean up buffers and sources
-      alDeleteSources(1, &m_source);
+      palDeleteSources(1, &m_source);
       m_source = 0;
-      alDeleteBuffers(num_buffers, m_buffers.data());
+      palDeleteBuffers(num_buffers, m_buffers.data());
     }
 
-    ALCdevice* device = alcGetContextsDevice(context);
+    ALCdevice* device = palcGetContextsDevice(context);
 
-    alcMakeContextCurrent(nullptr);
-    alcDestroyContext(context);
-    alcCloseDevice(device);
+    palcMakeContextCurrent(nullptr);
+    palcDestroyContext(context);
+    palcCloseDevice(device);
   }
 }
 
 ALenum COpenALStream::CheckALError(std::string desc)
 {
-  ALenum err = alGetError();
+  ALenum err = palGetError();
 
   if (err != AL_NO_ERROR)
   {
     std::ostringstream string_stream;
-    string_stream << "Error " << desc.c_str() << ": " << alGetString(err) << "\n";
+    string_stream << "Error " << desc.c_str() << ": " << palGetString(err) << "\n";
     OutputDebugStringA(string_stream.str().c_str());
   }
 
@@ -394,7 +480,7 @@ ALenum COpenALStream::CheckALError(std::string desc)
 
 HRESULT COpenALStream::Stop()
 {
-  alSourceStop(m_source);
+  palSourceStop(m_source);
 
   return S_OK;
 }
@@ -474,19 +560,19 @@ void COpenALStream::SetVolume(int volume)
   m_volume = (float)volume / 100.0f;
 
   if (m_source)
-    alSourcef(m_source, AL_GAIN, m_volume);
+    palSourcef(m_source, AL_GAIN, m_volume);
 }
 
 static bool IsCreativeXFi()
 {
-  return strstr(alGetString(AL_RENDERER), "X-Fi") != nullptr;
+  return strstr(palGetString(AL_RENDERER), "X-Fi") != nullptr;
 }
 
 std::vector<COpenALStream::MediaBitness> COpenALStream::getSupportedBitness()
 {
   std::vector<MediaBitness> supported_bitness;
 
-  bool float32_capable = alIsExtensionPresent("AL_EXT_float32") != 0;
+  bool float32_capable = palIsExtensionPresent("AL_EXT_float32") != 0;
   bool fixed32_capable = IsCreativeXFi();
 
   if (float32_capable)
@@ -509,7 +595,7 @@ std::vector<COpenALStream::MediaBitness> COpenALStream::getSupportedBitness()
 std::vector<COpenALStream::SpeakerLayout> COpenALStream::getSupportedSpeakerLayout()
 {
   std::vector<SpeakerLayout> supported_layouts;
-  bool surround_capable = alIsExtensionPresent("AL_EXT_MCFORMATS") || IsCreativeXFi();
+  bool surround_capable = palIsExtensionPresent("AL_EXT_MCFORMATS") || IsCreativeXFi();
 
   if (surround_capable)
   {
@@ -530,8 +616,8 @@ void COpenALStream::SoundLoop()
   SpeakerLayout past_speaker_layout = m_speaker_layout;
   MediaBitness past_bitness = m_bitness;
 
-  bool float32_capable = alIsExtensionPresent("AL_EXT_float32") != 0;
-  bool surround_capable = alIsExtensionPresent("AL_EXT_MCFORMATS") || IsCreativeXFi();
+  bool float32_capable = palIsExtensionPresent("AL_EXT_float32") != 0;
+  bool surround_capable = palIsExtensionPresent("AL_EXT_MCFORMATS") || IsCreativeXFi();
 
   // As there is no extension to check for 32-bit fixed point support
   // and we know that only a X-Fi with hardware OpenAL supports it,
@@ -560,18 +646,18 @@ void COpenALStream::SoundLoop()
   m_source = 0;
 
   // Clear error state before querying or else we get false positives.
-  ALenum err = alGetError();
+  ALenum err = palGetError();
 
   // Generate some AL Buffers for streaming
-  alGenBuffers(num_buffers, (ALuint*)m_buffers.data());
+  palGenBuffers(num_buffers, (ALuint*)m_buffers.data());
   err = CheckALError("generating buffers");
 
   // Generate a Source to playback the Buffers
-  alGenSources(1, &m_source);
+  palGenSources(1, &m_source);
   err = CheckALError("generating sources");
 
   // Set the default sound volume as saved in the config file.
-  alSourcef(m_source, AL_GAIN, m_volume);
+  palSourcef(m_source, AL_GAIN, m_volume);
 
   // TODO: Error handling
   // ALenum err = alGetError();
@@ -593,11 +679,11 @@ void COpenALStream::SoundLoop()
       if (past_frequency != m_frequency || past_bitness != m_bitness || past_speaker_layout != m_speaker_layout)
       {
         // Stop source and clean-up buffers
-        alSourceStop(m_source);
-        alSourcei(m_source, AL_BUFFER, 0);
+        palSourceStop(m_source);
+        palSourcei(m_source, AL_BUFFER, 0);
 
-        alDeleteBuffers(num_buffers, m_buffers.data());
-        alGenBuffers(num_buffers, (ALuint*)m_buffers.data());
+        palDeleteBuffers(num_buffers, m_buffers.data());
+        palGenBuffers(num_buffers, (ALuint*)m_buffers.data());
         err = CheckALError("re-generating buffers");
 
         next_buffer = 0;
@@ -619,8 +705,8 @@ void COpenALStream::SoundLoop()
 
       // Block until we have a free buffer
       int num_buffers_processed = 0;
-      alGetSourcei(m_source, AL_BUFFERS_PROCESSED, &num_buffers_processed);
-      alGetSourcei(m_source, AL_SOURCE_STATE, &state);
+      palGetSourcei(m_source, AL_BUFFERS_PROCESSED, &num_buffers_processed);
+      palGetSourcei(m_source, AL_SOURCE_STATE, &state);
       if (num_buffers_queued == num_buffers && !num_buffers_processed)
       {
         std::this_thread::sleep_for(std::chrono::milliseconds(1));
@@ -631,7 +717,7 @@ void COpenALStream::SoundLoop()
       if (num_buffers_processed)
       {
         std::vector<ALuint> unqueued_buffer_ids(num_buffers);
-        alSourceUnqueueBuffers(m_source, num_buffers_processed, unqueued_buffer_ids.data());
+        palSourceUnqueueBuffers(m_source, num_buffers_processed, unqueued_buffer_ids.data());
         err = CheckALError("unqueuing buffers");
 
         num_buffers_queued -= num_buffers_processed;
@@ -667,127 +753,127 @@ void COpenALStream::SoundLoop()
       case Mono:
         if (m_bitness == bit8)
         {
-          alBufferData(m_buffers[next_buffer], AL_FORMAT_MONO8, byte_data.data(),
+          palBufferData(m_buffers[next_buffer], AL_FORMAT_MONO8, byte_data.data(),
             static_cast<ALsizei>(available_frames) * FRAME_MONO_BYTE, m_frequency);
         }
         else if (m_bitness == bit16)
         {
-          alBufferData(m_buffers[next_buffer], AL_FORMAT_MONO16, short_data.data(),
+          palBufferData(m_buffers[next_buffer], AL_FORMAT_MONO16, short_data.data(),
             static_cast<ALsizei>(available_frames) * FRAME_MONO_SHORT, m_frequency);
         }
         else if (m_bitness == bit32 && fixed32_capable)
         {
-          alBufferData(m_buffers[next_buffer], alGetEnumValue("AL_FORMAT_MONO32"), long_data.data(),
+          palBufferData(m_buffers[next_buffer], palGetEnumValue("AL_FORMAT_MONO32"), long_data.data(),
             static_cast<ALsizei>(available_frames) * FRAME_MONO_INT32, m_frequency);
         }
         else if (m_bitness == bitfloat && float32_capable)
         {
-          alBufferData(m_buffers[next_buffer], AL_FORMAT_MONO_FLOAT32, float_data.data(),
+          palBufferData(m_buffers[next_buffer], AL_FORMAT_MONO_FLOAT32, float_data.data(),
             static_cast<ALsizei>(available_frames) * FRAME_STEREO_FLOAT, m_frequency);
         }
         break;
       case Stereo:
         if (m_bitness == bit8)
         {
-          alBufferData(m_buffers[next_buffer], AL_FORMAT_STEREO8, byte_data.data(),
+          palBufferData(m_buffers[next_buffer], AL_FORMAT_STEREO8, byte_data.data(),
             static_cast<ALsizei>(available_frames) * FRAME_STEREO_BYTE, m_frequency);
         }
         else if (m_bitness == bit16)
         {
-          alBufferData(m_buffers[next_buffer], AL_FORMAT_STEREO16, short_data.data(),
+          palBufferData(m_buffers[next_buffer], AL_FORMAT_STEREO16, short_data.data(),
             static_cast<ALsizei>(available_frames) * FRAME_STEREO_SHORT, m_frequency);
         }
         else if (m_bitness == bit32 && fixed32_capable)
         {
-          alBufferData(m_buffers[next_buffer], AL_FORMAT_STEREO32, long_data.data(),
+          palBufferData(m_buffers[next_buffer], AL_FORMAT_STEREO32, long_data.data(),
             static_cast<ALsizei>(available_frames) * FRAME_STEREO_INT32, m_frequency);
         }
         else if (m_bitness == bitfloat && float32_capable)
         {
-          alBufferData(m_buffers[next_buffer], AL_FORMAT_STEREO_FLOAT32, float_data.data(),
+          palBufferData(m_buffers[next_buffer], AL_FORMAT_STEREO_FLOAT32, float_data.data(),
             static_cast<ALsizei>(available_frames) * FRAME_STEREO_FLOAT, m_frequency);
         }
         break;
       case Quad:
         if (m_bitness == bit8)
         {
-          alBufferData(m_buffers[next_buffer], alGetEnumValue("AL_FORMAT_QUAD8"), byte_data.data(),
+          palBufferData(m_buffers[next_buffer], palGetEnumValue("AL_FORMAT_QUAD8"), byte_data.data(),
             static_cast<ALsizei>(available_frames) * FRAME_QUAD_BYTE, m_frequency);
         }
         else if (m_bitness == bit16)
         {
-          alBufferData(m_buffers[next_buffer], alGetEnumValue("AL_FORMAT_QUAD16"), short_data.data(),
+          palBufferData(m_buffers[next_buffer], palGetEnumValue("AL_FORMAT_QUAD16"), short_data.data(),
             static_cast<ALsizei>(available_frames) * FRAME_QUAD_SHORT, m_frequency);
         }
         else if (m_bitness == bit32 && fixed32_capable)
         {
-          alBufferData(m_buffers[next_buffer], alGetEnumValue("AL_FORMAT_QUAD32"), long_data.data(),
+          palBufferData(m_buffers[next_buffer], palGetEnumValue("AL_FORMAT_QUAD32"), long_data.data(),
             static_cast<ALsizei>(available_frames) * FRAME_QUAD_INT32, m_frequency);
         }
         else if (m_bitness == bitfloat && float32_capable)
         {
-          alBufferData(m_buffers[next_buffer], alGetEnumValue("AL_FORMAT_QUAD32"), float_data.data(),
+          palBufferData(m_buffers[next_buffer], palGetEnumValue("AL_FORMAT_QUAD32"), float_data.data(),
             static_cast<ALsizei>(available_frames) * FRAME_QUAD_FLOAT, m_frequency);
         }
         break;
       case Surround6:
         if (m_bitness == bit8)
         {
-          alBufferData(m_buffers[next_buffer], alGetEnumValue("AL_FORMAT_51CHN8"), byte_data.data(),
+          palBufferData(m_buffers[next_buffer], palGetEnumValue("AL_FORMAT_51CHN8"), byte_data.data(),
             static_cast<ALsizei>(available_frames) * FRAME_SURROUND6_BYTE, m_frequency);
         }
         else if (m_bitness == bit16)
         {
-          alBufferData(m_buffers[next_buffer], AL_FORMAT_51CHN16, short_data.data(),
+          palBufferData(m_buffers[next_buffer], AL_FORMAT_51CHN16, short_data.data(),
             static_cast<ALsizei>(available_frames) * FRAME_SURROUND6_SHORT, m_frequency);
         }
         else if (m_bitness == bit32 && fixed32_capable)
         {
-          alBufferData(m_buffers[next_buffer], AL_FORMAT_51CHN32, long_data.data(),
+          palBufferData(m_buffers[next_buffer], AL_FORMAT_51CHN32, long_data.data(),
             static_cast<ALsizei>(available_frames) * FRAME_SURROUND6_INT32, m_frequency);
         }
         else if (m_bitness == bitfloat && float32_capable)
         {
-          alBufferData(m_buffers[next_buffer], AL_FORMAT_51CHN32, float_data.data(),
+          palBufferData(m_buffers[next_buffer], AL_FORMAT_51CHN32, float_data.data(),
             static_cast<ALsizei>(available_frames) * FRAME_SURROUND6_FLOAT, m_frequency);
         }
         break;
       case Surround8:
         if (m_bitness == bit8)
         {
-          alBufferData(m_buffers[next_buffer], alGetEnumValue("AL_FORMAT_71CHN8"), byte_data.data(),
+          palBufferData(m_buffers[next_buffer], palGetEnumValue("AL_FORMAT_71CHN8"), byte_data.data(),
             static_cast<ALsizei>(available_frames) * FRAME_SURROUND8_BYTE, m_frequency);
         }
         else if (m_bitness == bit16)
         {
-          alBufferData(m_buffers[next_buffer], alGetEnumValue("AL_FORMAT_71CHN16"), short_data.data(),
+          palBufferData(m_buffers[next_buffer], palGetEnumValue("AL_FORMAT_71CHN16"), short_data.data(),
             static_cast<ALsizei>(available_frames) * FRAME_SURROUND8_SHORT, m_frequency);
         }
         else if (m_bitness == bit32 && fixed32_capable)
         {
-          alBufferData(m_buffers[next_buffer], alGetEnumValue("AL_FORMAT_71CHN32"), long_data.data(),
+          palBufferData(m_buffers[next_buffer], palGetEnumValue("AL_FORMAT_71CHN32"), long_data.data(),
             static_cast<ALsizei>(available_frames) * FRAME_SURROUND8_INT32, m_frequency);
         }
         else if (m_bitness == bitfloat && float32_capable)
         {
-          alBufferData(m_buffers[next_buffer], alGetEnumValue("AL_FORMAT_71CHN32"), float_data.data(),
+          palBufferData(m_buffers[next_buffer], palGetEnumValue("AL_FORMAT_71CHN32"), float_data.data(),
             static_cast<ALsizei>(available_frames) * FRAME_SURROUND8_FLOAT, m_frequency);
         }
         break;
       }
       err = CheckALError("buffering data");
 
-      alSourceQueueBuffers(m_source, 1, &m_buffers[next_buffer]);
+      palSourceQueueBuffers(m_source, 1, &m_buffers[next_buffer]);
       err = CheckALError("queuing buffers");
 
       num_buffers_queued++;
       next_buffer = (next_buffer + 1) % num_buffers;
 
-      alGetSourcei(m_source, AL_SOURCE_STATE, &state);
+      palGetSourcei(m_source, AL_SOURCE_STATE, &state);
       if (state != AL_PLAYING)
       {
         // Buffer underrun occurred, resume playback
-        alSourcePlay(m_source);
+        palSourcePlay(m_source);
         err = CheckALError("occurred resuming playback");
         OutputDebugStringA("Buffer underrun\n");
       }

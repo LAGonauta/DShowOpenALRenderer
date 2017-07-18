@@ -136,6 +136,8 @@ public:
   std::vector<SpeakerLayout> getSupportedSpeakerLayout();
 
 private:
+  STDMETHODIMP isValid();
+
   std::thread m_thread;
   std::atomic<bool> m_run_thread = false;
 
