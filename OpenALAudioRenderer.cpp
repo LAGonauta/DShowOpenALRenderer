@@ -54,7 +54,7 @@ CFactoryTemplate g_Templates[] = {
   { L"OpenAL Renderer"
   , &CLSID_OALRend
   , (LPFNNewCOMObject)COpenALFilter::CreateInstance
-  , NULL
+  , nullptr
   , &sudOALRend }
 };
 int g_cTemplates = sizeof(g_Templates) / sizeof(g_Templates[0]);
@@ -85,7 +85,7 @@ COpenALFilter::COpenALFilter(LPUNKNOWN pUnk, HRESULT *phr) :
 
   // Create the single input pin
   m_pInputPin = new CAudioInputPin(this, phr, L"Audio Input Pin");
-  if (m_pInputPin == NULL)
+  if (m_pInputPin == nullptr)
   {
     if (phr)
       *phr = E_OUTOFMEMORY;
@@ -138,7 +138,7 @@ CBasePin *COpenALFilter::GetPin(int n)
   ASSERT(n == 0);
   if (n != 0)
   {
-    return NULL;
+    return nullptr;
   }
 
   return m_pInputPin;

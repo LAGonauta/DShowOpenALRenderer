@@ -324,7 +324,7 @@ STDMETHODIMP COpenALStream::OpenDevice(void)
 
   {
     std::ostringstream string;
-    string << "Found OpenAL device \"" << devices[0].c_str() << "\".\n";
+    string << "Found OpenAL device \"" << devices[0].c_str() << "\"."<< std::endl;
     OutputDebugStringA(string.str().c_str());
   }
 
@@ -332,7 +332,7 @@ STDMETHODIMP COpenALStream::OpenDevice(void)
   if (!device)
   {
     std::ostringstream string;
-    string << "OpenAL: can't open device " << devices[0].c_str() << "\n";
+    string << "OpenAL: can't open device " << devices[0].c_str() << std::endl;
     OutputDebugStringA(string.str().c_str());
     return E_FAIL;
   }
@@ -342,7 +342,7 @@ STDMETHODIMP COpenALStream::OpenDevice(void)
   {
     palcCloseDevice(device);
     std::ostringstream string;
-    string << "OpenAL: can't create context for device " << devices[0].c_str() << "\n";
+    string << "OpenAL: can't create context for device " << devices[0].c_str() << std::endl;
     OutputDebugStringA(string.str().c_str());
     return E_FAIL;
   }
@@ -471,7 +471,7 @@ ALenum COpenALStream::CheckALError(std::string desc)
   if (err != AL_NO_ERROR)
   {
     std::ostringstream string_stream;
-    string_stream << "Error " << desc.c_str() << ": " << palGetString(err) << "\n";
+    string_stream << "Error " << desc.c_str() << ": " << palGetString(err) << std::endl;
     OutputDebugStringA(string_stream.str().c_str());
   }
 
@@ -637,7 +637,7 @@ void COpenALStream::SoundLoop()
 
   std::ostringstream string;
   string << "Using " << num_buffers << " buffers, each with " << frames_per_buffer <<
-    " audio frames for a total of " << frames_per_buffer * num_buffers << " frames.\n";
+    " audio frames for a total of " << frames_per_buffer * num_buffers << " frames." << std::endl;
   OutputDebugStringA(string.str().c_str());
 
   // Should we make these larger just in case the mixer ever sends more samples
