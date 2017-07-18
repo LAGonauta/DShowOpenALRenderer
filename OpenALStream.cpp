@@ -19,8 +19,8 @@ COpenALStream::~COpenALStream(void)
 
 COpenALStream::COpenALStream(CMixer* audioMixer, LPUNKNOWN pUnk, HRESULT * phr)
   : CBaseReferenceClock(NAME("OpenAL Stream Clock"), pUnk, phr),
-    CBasicAudio(L"OpenAL Volume Setting", pUnk),
-    m_pCurrentRefClock(0), m_pPrevRefClock(0)
+  CBasicAudio(L"OpenAL Volume Setting", pUnk),
+  m_pCurrentRefClock(0), m_pPrevRefClock(0)
 {
   EXECUTE_ASSERT(SUCCEEDED(OpenDevice()));
 
@@ -493,7 +493,7 @@ std::vector<COpenALStream::MediaBitness> COpenALStream::getSupportedBitness()
 
   if (float32_capable)
   {
-    //supported_bitness.push_back(bitfloat);
+    supported_bitness.push_back(bitfloat);
   }
 
   if (fixed32_capable)
@@ -503,7 +503,7 @@ std::vector<COpenALStream::MediaBitness> COpenALStream::getSupportedBitness()
 
   // All implementation support 16-bit and 8-bit
   supported_bitness.push_back(bit16);
-  //supported_bitness.push_back(bit8);
+  supported_bitness.push_back(bit8);
 
   return supported_bitness;
 }
@@ -515,13 +515,13 @@ std::vector<COpenALStream::SpeakerLayout> COpenALStream::getSupportedSpeakerLayo
 
   if (surround_capable)
   {
-    //supported_layouts.push_back(Surround8);
+    supported_layouts.push_back(Surround8);
     supported_layouts.push_back(Surround6);
   }
 
-  //supported_layouts.push_back(Quad);
+  supported_layouts.push_back(Quad);
   supported_layouts.push_back(Stereo);
-  //supported_layouts.push_back(Mono);
+  supported_layouts.push_back(Mono);
 
   return supported_layouts;
 }
@@ -553,7 +553,7 @@ void COpenALStream::SoundLoop()
 
   std::ostringstream string;
   string << "Using " << num_buffers << " buffers, each with " << frames_per_buffer <<
-            " audio frames for a total of " << frames_per_buffer * num_buffers << " frames.\n";
+    " audio frames for a total of " << frames_per_buffer * num_buffers << " frames.\n";
   OutputDebugStringA(string.str().c_str());
 
   // Should we make these larger just in case the mixer ever sends more samples
@@ -582,8 +582,10 @@ void COpenALStream::SoundLoop()
   unsigned int num_buffers_queued = 0;
   ALint state = 0;
 
+  std::vector<int8_t> byte_data;
   std::vector<int16_t> short_data;
   std::vector<int32_t> long_data;
+  std::vector<float_t> float_data;
 
   while (m_run_thread)
   {
@@ -641,59 +643,139 @@ void COpenALStream::SoundLoop()
       //ClockController();
 
       size_t available_frames = 0;
-      if (m_speaker_layout == Surround6)
+      switch (m_bitness)
       {
-        if (m_bitness == bit16)
-        {
-          available_frames = m_mixer->Mix(&short_data, frames_per_buffer);
-
-          if (!available_frames)
-          {
-            continue;
-          }
-
-          alBufferData(m_buffers[next_buffer], AL_FORMAT_51CHN16, short_data.data(),
-                       static_cast<ALsizei>(available_frames) * FRAME_SURROUND_SHORT, m_frequency);
-        }
-        else if (m_bitness = bit32)
-        {
-          available_frames = m_mixer->Mix(&long_data, frames_per_buffer);
-
-          if (!available_frames)
-          {
-            continue;
-          }
-
-          alBufferData(m_buffers[next_buffer], AL_FORMAT_51CHN32, long_data.data(),
-                       static_cast<ALsizei>(available_frames) * FRAME_SURROUND_INT32, m_frequency);
-        }
+      case bit8:
+        available_frames = m_mixer->Mix(&byte_data, frames_per_buffer);
+        break;
+      case bit16:
+        available_frames = m_mixer->Mix(&short_data, frames_per_buffer);
+        break;
+      case bit32:
+        available_frames = m_mixer->Mix(&long_data, frames_per_buffer);
+        break;
+      case bitfloat:
+        available_frames = m_mixer->Mix(&float_data, frames_per_buffer);
+        break;
       }
-      else
+
+      if (!available_frames)
       {
-        if (m_bitness == bit16)
+        continue;
+      }
+
+      switch (m_speaker_layout)
+      {
+      case Mono:
+        if (m_bitness == bit8)
         {
-          available_frames = m_mixer->Mix(&short_data, frames_per_buffer);
-
-          if (!available_frames)
-          {
-            continue;
-          }
-
+          alBufferData(m_buffers[next_buffer], AL_FORMAT_MONO8, byte_data.data(),
+            static_cast<ALsizei>(available_frames) * FRAME_MONO_BYTE, m_frequency);
+        }
+        else if (m_bitness == bit16)
+        {
+          alBufferData(m_buffers[next_buffer], AL_FORMAT_MONO16, short_data.data(),
+            static_cast<ALsizei>(available_frames) * FRAME_MONO_SHORT, m_frequency);
+        }
+        else if (m_bitness == bit32 && fixed32_capable)
+        {
+          alBufferData(m_buffers[next_buffer], alGetEnumValue("AL_FORMAT_MONO32"), long_data.data(),
+            static_cast<ALsizei>(available_frames) * FRAME_MONO_INT32, m_frequency);
+        }
+        else if (m_bitness == bitfloat && float32_capable)
+        {
+          alBufferData(m_buffers[next_buffer], AL_FORMAT_MONO_FLOAT32, float_data.data(),
+            static_cast<ALsizei>(available_frames) * FRAME_STEREO_FLOAT, m_frequency);
+        }
+        break;
+      case Stereo:
+        if (m_bitness == bit8)
+        {
+          alBufferData(m_buffers[next_buffer], AL_FORMAT_STEREO8, byte_data.data(),
+            static_cast<ALsizei>(available_frames) * FRAME_STEREO_BYTE, m_frequency);
+        }
+        else if (m_bitness == bit16)
+        {
           alBufferData(m_buffers[next_buffer], AL_FORMAT_STEREO16, short_data.data(),
-                       static_cast<ALsizei>(available_frames) * FRAME_STEREO_SHORT, m_frequency);
+            static_cast<ALsizei>(available_frames) * FRAME_STEREO_SHORT, m_frequency);
         }
-        else if (m_bitness = bit32)
+        else if (m_bitness == bit32 && fixed32_capable)
         {
-          available_frames = m_mixer->Mix(&long_data, frames_per_buffer);
-
-          if (!available_frames)
-          {
-            continue;
-          }
-
           alBufferData(m_buffers[next_buffer], AL_FORMAT_STEREO32, long_data.data(),
-                       static_cast<ALsizei>(available_frames) * FRAME_STEREO_INT32, m_frequency);
+            static_cast<ALsizei>(available_frames) * FRAME_STEREO_INT32, m_frequency);
         }
+        else if (m_bitness == bitfloat && float32_capable)
+        {
+          alBufferData(m_buffers[next_buffer], AL_FORMAT_STEREO_FLOAT32, float_data.data(),
+            static_cast<ALsizei>(available_frames) * FRAME_STEREO_FLOAT, m_frequency);
+        }
+        break;
+      case Quad:
+        if (m_bitness == bit8)
+        {
+          alBufferData(m_buffers[next_buffer], alGetEnumValue("AL_FORMAT_QUAD8"), byte_data.data(),
+            static_cast<ALsizei>(available_frames) * FRAME_QUAD_BYTE, m_frequency);
+        }
+        else if (m_bitness == bit16)
+        {
+          alBufferData(m_buffers[next_buffer], alGetEnumValue("AL_FORMAT_QUAD16"), short_data.data(),
+            static_cast<ALsizei>(available_frames) * FRAME_QUAD_SHORT, m_frequency);
+        }
+        else if (m_bitness == bit32 && fixed32_capable)
+        {
+          alBufferData(m_buffers[next_buffer], alGetEnumValue("AL_FORMAT_QUAD32"), long_data.data(),
+            static_cast<ALsizei>(available_frames) * FRAME_QUAD_INT32, m_frequency);
+        }
+        else if (m_bitness == bitfloat && float32_capable)
+        {
+          alBufferData(m_buffers[next_buffer], alGetEnumValue("AL_FORMAT_QUAD32"), float_data.data(),
+            static_cast<ALsizei>(available_frames) * FRAME_QUAD_FLOAT, m_frequency);
+        }
+        break;
+      case Surround6:
+        if (m_bitness == bit8)
+        {
+          alBufferData(m_buffers[next_buffer], alGetEnumValue("AL_FORMAT_51CHN8"), byte_data.data(),
+            static_cast<ALsizei>(available_frames) * FRAME_SURROUND6_BYTE, m_frequency);
+        }
+        else if (m_bitness == bit16)
+        {
+          alBufferData(m_buffers[next_buffer], AL_FORMAT_51CHN16, short_data.data(),
+            static_cast<ALsizei>(available_frames) * FRAME_SURROUND6_SHORT, m_frequency);
+        }
+        else if (m_bitness == bit32 && fixed32_capable)
+        {
+          alBufferData(m_buffers[next_buffer], AL_FORMAT_51CHN32, long_data.data(),
+            static_cast<ALsizei>(available_frames) * FRAME_SURROUND6_INT32, m_frequency);
+        }
+        else if (m_bitness == bitfloat && float32_capable)
+        {
+          alBufferData(m_buffers[next_buffer], AL_FORMAT_51CHN32, float_data.data(),
+            static_cast<ALsizei>(available_frames) * FRAME_SURROUND6_FLOAT, m_frequency);
+        }
+        break;
+      case Surround8:
+        if (m_bitness == bit8)
+        {
+          alBufferData(m_buffers[next_buffer], alGetEnumValue("AL_FORMAT_71CHN8"), byte_data.data(),
+            static_cast<ALsizei>(available_frames) * FRAME_SURROUND8_BYTE, m_frequency);
+        }
+        else if (m_bitness == bit16)
+        {
+          alBufferData(m_buffers[next_buffer], alGetEnumValue("AL_FORMAT_71CHN16"), short_data.data(),
+            static_cast<ALsizei>(available_frames) * FRAME_SURROUND8_SHORT, m_frequency);
+        }
+        else if (m_bitness == bit32 && fixed32_capable)
+        {
+          alBufferData(m_buffers[next_buffer], alGetEnumValue("AL_FORMAT_71CHN32"), long_data.data(),
+            static_cast<ALsizei>(available_frames) * FRAME_SURROUND8_INT32, m_frequency);
+        }
+        else if (m_bitness == bitfloat && float32_capable)
+        {
+          alBufferData(m_buffers[next_buffer], alGetEnumValue("AL_FORMAT_71CHN32"), float_data.data(),
+            static_cast<ALsizei>(available_frames) * FRAME_SURROUND8_FLOAT, m_frequency);
+        }
+        break;
       }
       err = CheckALError("buffering data");
 

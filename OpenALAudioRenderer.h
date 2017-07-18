@@ -97,6 +97,7 @@ private:
   int m_nChannels;                // number of active channels
   int m_nSamplesPerSec;           // Samples per second
   int m_nBitsPerSample;           // Number bits per sample
+  bool m_is_float;
   int m_nBlockAlign;              // Alignment on the samples
   size_t m_desired_samples = 0;
 
@@ -106,6 +107,7 @@ private:
   concurrency::concurrent_queue<int16_t> m_sample_queue;
   concurrency::concurrent_queue<int8_t> m_sample_queue_8bit;
   concurrency::concurrent_queue<int32_t> m_sample_queue_32bit;
+  concurrency::concurrent_queue<float_t> m_sample_queue_float;
 
   // Locking between inbound samples and the mixer
   std::atomic<size_t> m_rendered_samples = 0;
@@ -131,8 +133,10 @@ public:
 
   // Called when the input pin receives a sample
   HRESULT Receive(IMediaSample* pIn);
+  size_t Mix(std::vector<int8_t>* samples, size_t num_frames);
   size_t Mix(std::vector<int16_t>* samples, size_t num_frames);
   size_t Mix(std::vector<int32_t>* samples, size_t num_frames);
+  size_t Mix(std::vector<float_t>* samples, size_t num_frames);
 
 }; // CMixer
 

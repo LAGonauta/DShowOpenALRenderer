@@ -525,6 +525,8 @@ HRESULT CAudioInputPin::CheckMediaType(const CMediaType *pmt)
     return E_INVALIDARG;
   }
 
+  m_pFilter->m_mixer.m_is_float = (pwfx->wFormatTag == WAVE_FORMAT_IEEE_FLOAT);
+
   // Check if our OpenAL driver supports it
   auto hr = CheckOpenALMediaType(pwfx);
   if (FAILED(hr))
@@ -558,6 +560,7 @@ HRESULT CAudioInputPin::SetMediaType(const CMediaType *pmt)
     m_pFilter->m_mixer.m_nSamplesPerSec = pwf->nSamplesPerSec;
     m_pFilter->m_mixer.m_nBitsPerSample = pwf->wBitsPerSample;
     m_pFilter->m_mixer.m_nBlockAlign = pwf->nBlockAlign;
+    m_pFilter->m_mixer.m_is_float = (pwf->wFormatTag == WAVE_FORMAT_IEEE_FLOAT);
 
     auto hrr = CheckOpenALMediaType(pwf);
     if (FAILED(hrr))
@@ -631,6 +634,12 @@ HRESULT CAudioInputPin::Receive(IMediaSample * pSample)
       {
         return hr;
       }
+
+      // Clear queues
+      m_pFilter->m_mixer.m_sample_queue.clear();
+      m_pFilter->m_mixer.m_sample_queue_8bit.clear();
+      m_pFilter->m_mixer.m_sample_queue_32bit.clear();
+      m_pFilter->m_mixer.m_sample_queue_float.clear();
     }
 
     //if (m_eosUp)
@@ -742,7 +751,7 @@ void CMixer::CopyWaveform(IMediaSample *pMediaSample)
     return;
 
   pMediaSample->GetPointer(&pWave);
-  ASSERT(pWave != NULL);
+  ASSERT(pWave != nullptr);
 
   nBytes = pMediaSample->GetActualDataLength();
   nSamplesPerChan = nBytes / m_nBlockAlign;
@@ -780,16 +789,34 @@ void CMixer::CopyWaveform(IMediaSample *pMediaSample)
   }
   else if (m_nBitsPerSample == 32)
   {
-    DWORD* pdw = (DWORD*)pWave;
-
-    while (nSamplesPerChan--)
+    if (m_is_float)
     {
-      uint32_t value = 0;
-      for (int i = 0; i < m_nChannels; ++i)
+      float_t* pdw = (float_t*)pWave;
+
+      while (nSamplesPerChan--)
       {
-        value = *pdw++;
-        m_sample_queue_32bit.push(value);
-        ++pushed_samples;
+        float_t value = 0;
+        for (int i = 0; i < m_nChannels; ++i)
+        {
+          value = *pdw++;
+          m_sample_queue_float.push(value);
+          ++pushed_samples;
+        }
+      }
+    }
+    else
+    {
+      DWORD* pdw = (DWORD*)pWave;
+
+      while (nSamplesPerChan--)
+      {
+        uint32_t value = 0;
+        for (int i = 0; i < m_nChannels; ++i)
+        {
+          value = *pdw++;
+          m_sample_queue_32bit.push(value);
+          ++pushed_samples;
+        }
       }
     }
   }
@@ -881,6 +908,50 @@ HRESULT CMixer::WaitForFrames(size_t num_of_bits)
   }
 }
 
+size_t CMixer::Mix(std::vector<int8_t>* samples, size_t num_frames)
+{
+  if (!samples)
+    return 0;
+
+  // 2 = stereo
+  // 6 = 5.1
+  m_desired_samples = num_frames * m_nChannels;
+  samples->resize(m_desired_samples);
+
+  // Wait for queue to fill
+  size_t effective_samples = 0;
+
+  // Still need to check EOS
+  bool all_ok = false;
+  while (m_sample_queue_8bit.unsafe_size() < m_desired_samples) //&& m_notEOS)
+  {
+    m_request_samples = true;
+    m_request_samples_cv.notify_one();
+
+    if (WaitForFrames(8) == S_OK)
+    {
+      all_ok = true;
+    }
+    else
+    {
+      break;
+    }
+  }
+
+  for (size_t i = 0; i < m_desired_samples; ++i)
+  {
+    int8_t value = 0;
+    if (m_sample_queue_8bit.try_pop(value))
+    {
+      (*samples)[i] = value;
+    }
+  }
+  // Set EOS samples here
+  effective_samples = m_desired_samples;
+
+  return effective_samples / m_nChannels;
+}
+
 size_t CMixer::Mix(std::vector<int16_t>* samples, size_t num_frames)
 {
   if (!samples)
@@ -959,6 +1030,51 @@ size_t CMixer::Mix(std::vector<int32_t>* samples, size_t num_frames)
   {
     int32_t value = 0;
     if (m_sample_queue_32bit.try_pop(value))
+    {
+      (*samples)[i] = value;
+    }
+  }
+
+  // Set EOS samples here
+  effective_samples = m_desired_samples;
+
+  return effective_samples / m_nChannels;
+}
+
+size_t CMixer::Mix(std::vector<float_t>* samples, size_t num_frames)
+{
+  if (!samples)
+    return 0;
+
+  // 2 = stereo
+  // 6 = 5.1
+  m_desired_samples = num_frames * m_nChannels;
+  samples->resize(m_desired_samples);
+
+  // Wait for queue to fill
+  size_t effective_samples = 0;
+
+  // Still need to check EOS
+  bool all_ok = false;
+  while (m_sample_queue_float.unsafe_size() < m_desired_samples) //&& m_notEOS)
+  {
+    m_request_samples = true;
+    m_request_samples_cv.notify_one();
+
+    if (WaitForFrames(32) == S_OK)
+    {
+      all_ok = true;
+    }
+    else
+    {
+      break;
+    }
+  }
+
+  for (size_t i = 0; i < m_desired_samples; ++i)
+  {
+    float_t value = 0;
+    if (m_sample_queue_float.try_pop(value))
     {
       (*samples)[i] = value;
     }
