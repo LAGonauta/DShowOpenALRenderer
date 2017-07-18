@@ -80,23 +80,6 @@ CUnknown * WINAPI COpenALFilter::CreateInstance(LPUNKNOWN pUnk, HRESULT *phr)
   //
 #pragma warning(disable:4355 4127)
 
-void COpenALFilter::PrintOpenALQueueBack()
-{
-  //static unsigned int number = 0;
-  //if (number >= 24000)
-  //{
-  //  auto value = m_openal_device.m_audio_buffer_queue.unsafe_begin();
-  //  wchar_t string_buf[1024] = { 0 };
-  //  swprintf(string_buf, L"Back value: %d\n", &value);
-  //  OutputDebugString(string_buf);
-  //  number = 0;
-  //}
-  //else
-  //{
-  //  ++number;
-  //}
-}
-
 COpenALFilter::COpenALFilter(LPUNKNOWN pUnk, HRESULT *phr) :
   CBaseFilter(NAME("OpenAL Renderer"), pUnk, (CCritSec *) this, CLSID_OALRend),
   m_mixer(NAME("OpenAL Renderer"), this, phr)

@@ -160,9 +160,6 @@ public:
 
   // OpenAL
   COpenALStream* m_openal_device;
-
-  // Add samples to OpenAL queue
-  void PrintOpenALQueueBack();
   virtual ~COpenALFilter();
 
   // Return the pins that we support

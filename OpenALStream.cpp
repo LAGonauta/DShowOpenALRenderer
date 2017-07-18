@@ -216,7 +216,7 @@ STDMETHODIMP COpenALStream::OpenDevice(void)
 {
   if (!alcIsExtensionPresent(nullptr, "ALC_ENUMERATION_EXT"))
   {
-    printf_s("OpenAL: can't find sound devices");
+    OutputDebugStringA("OpenAL: can't find sound devices\n");
     return E_FAIL;
   }
 
@@ -224,18 +224,24 @@ STDMETHODIMP COpenALStream::OpenDevice(void)
 
   if (!strlen(default_device))
   {
-    printf_s("No device found.\n");
+    OutputDebugStringA("No device found.\n");
     return E_FAIL;
   }
 
   std::vector<std::string> devices = GetAllDevices();
 
-  printf_s("Found OpenAL device %s", devices[0].c_str());
+  {
+    std::ostringstream string;
+    string << "Found OpenAL device \"" << devices[0].c_str() << "\".\n";
+    OutputDebugStringA(string.str().c_str());
+  }
 
   ALCdevice* device = alcOpenDevice(devices[0].c_str());
   if (!device)
   {
-    printf_s("OpenAL: can't open device %s", devices[0].c_str());
+    std::ostringstream string;
+    string << "OpenAL: can't open device " << devices[0].c_str() << "\n";
+    OutputDebugStringA(string.str().c_str());
     return E_FAIL;
   }
 
@@ -243,7 +249,9 @@ STDMETHODIMP COpenALStream::OpenDevice(void)
   if (!context)
   {
     alcCloseDevice(device);
-    printf_s("OpenAL: can't create context for device %s", devices[0].c_str());
+    std::ostringstream string;
+    string << "OpenAL: can't create context for device " << devices[0].c_str() << "\n";
+    OutputDebugStringA(string.str().c_str());
     return E_FAIL;
   }
 
@@ -501,13 +509,10 @@ void COpenALStream::SoundLoop()
     frames_per_buffer = m_frequency / 1000 * 1 / OAL_BUFFERS;
   }
 
-  if (frames_per_buffer > OAL_MAX_FRAMES)
-  {
-    frames_per_buffer = OAL_MAX_FRAMES;
-  }
-
-  printf_s("Using %d buffers, each with %d audio frames for a total of %d.", OAL_BUFFERS,
-    frames_per_buffer, frames_per_buffer * OAL_BUFFERS);
+  std::ostringstream string;
+  string << "Using " << OAL_BUFFERS << " buffers, each with " << frames_per_buffer <<
+            " audio frames for a total of " << frames_per_buffer * OAL_BUFFERS << " frames.\n";
+  OutputDebugStringA(string.str().c_str());
 
   // Should we make these larger just in case the mixer ever sends more samples
   // than what we request?
@@ -565,11 +570,6 @@ void COpenALStream::SoundLoop()
           frames_per_buffer = m_frequency / 1000 * 1 / OAL_BUFFERS;
         }
 
-        if (frames_per_buffer > OAL_MAX_FRAMES)
-        {
-          frames_per_buffer = OAL_MAX_FRAMES;
-        }
-
         past_frequency = m_frequency;
         past_bitness = m_bitness;
         past_speaker_layout = m_speaker_layout;
@@ -598,8 +598,6 @@ void COpenALStream::SoundLoop()
       // Control clock
       //ClockController();
 
-      size_t min_frames = 64;
-
       size_t available_frames = 0;
       if (m_speaker_layout == Surround6)
       {
@@ -607,13 +605,13 @@ void COpenALStream::SoundLoop()
         {
           available_frames = m_mixer->Mix(&short_data, frames_per_buffer);
 
-          if (available_frames < min_frames)
+          if (!available_frames)
           {
             continue;
           }
 
           alBufferData(m_buffers[next_buffer], AL_FORMAT_51CHN16, short_data.data(),
-            static_cast<ALsizei>(available_frames) * FRAME_SURROUND_SHORT, m_frequency);
+                       static_cast<ALsizei>(available_frames) * FRAME_SURROUND_SHORT, m_frequency);
         }
         else if (m_bitness = bit32)
         {
@@ -625,7 +623,7 @@ void COpenALStream::SoundLoop()
           }
 
           alBufferData(m_buffers[next_buffer], AL_FORMAT_51CHN32, long_data.data(),
-            static_cast<ALsizei>(available_frames) * FRAME_SURROUND_INT32, m_frequency);
+                       static_cast<ALsizei>(available_frames) * FRAME_SURROUND_INT32, m_frequency);
         }
       }
       else
@@ -640,7 +638,7 @@ void COpenALStream::SoundLoop()
           }
 
           alBufferData(m_buffers[next_buffer], AL_FORMAT_STEREO16, short_data.data(),
-            static_cast<ALsizei>(available_frames) * FRAME_STEREO_SHORT, m_frequency);
+                       static_cast<ALsizei>(available_frames) * FRAME_STEREO_SHORT, m_frequency);
         }
         else if (m_bitness = bit32)
         {
@@ -652,7 +650,7 @@ void COpenALStream::SoundLoop()
           }
 
           alBufferData(m_buffers[next_buffer], AL_FORMAT_STEREO32, long_data.data(),
-            static_cast<ALsizei>(available_frames) * FRAME_STEREO_INT32, m_frequency);
+                       static_cast<ALsizei>(available_frames) * FRAME_STEREO_INT32, m_frequency);
         }
       }
       err = CheckALError("buffering data");

@@ -13,20 +13,6 @@
 
 #include "streams.h"
 
-// OpenAL requires a minimum of two buffers, three or more recommended
-#define OAL_BUFFERS 3
-#define OAL_MAX_FRAMES 65536
-#define STEREO_CHANNELS 2
-#define SURROUND_CHANNELS 6  // number of channels in surround mode
-#define SIZE_SHORT 2
-#define SIZE_INT32 4
-#define SIZE_FLOAT 4  // size of a float in bytes
-#define FRAME_STEREO_SHORT STEREO_CHANNELS* SIZE_SHORT
-#define FRAME_STEREO_INT32 STEREO_CHANNELS* SIZE_INT32
-#define FRAME_SURROUND_FLOAT SURROUND_CHANNELS* SIZE_FLOAT
-#define FRAME_SURROUND_SHORT SURROUND_CHANNELS* SIZE_SHORT
-#define FRAME_SURROUND_INT32 SURROUND_CHANNELS* SIZE_INT32
-
 // From AL_EXT_float32
 #ifndef AL_FORMAT_STEREO_FLOAT32
 #define AL_FORMAT_STEREO_FLOAT32 0x10011
@@ -45,6 +31,19 @@
 #ifndef AL_FORMAT_STEREO32
 #define AL_FORMAT_STEREO32 0x1203
 #endif
+
+// OpenAL requires a minimum of two buffers, three or more recommended
+const size_t OAL_BUFFERS = 3;
+const size_t STEREO_CHANNELS = 2;
+const size_t SURROUND_CHANNELS = 6;  // number of channels in surround mode
+const size_t SIZE_SHORT = 2;
+const size_t SIZE_INT32 = 4;
+const size_t SIZE_FLOAT = 4;  // size of a float in bytes
+const size_t FRAME_STEREO_SHORT = STEREO_CHANNELS * SIZE_SHORT;
+const size_t FRAME_STEREO_INT32 = STEREO_CHANNELS * SIZE_INT32;
+const size_t FRAME_SURROUND_FLOAT = SURROUND_CHANNELS * SIZE_FLOAT;
+const size_t FRAME_SURROUND_SHORT = SURROUND_CHANNELS * SIZE_SHORT;
+const size_t FRAME_SURROUND_INT32 = SURROUND_CHANNELS * SIZE_INT32;
 
 class CMixer;
 
