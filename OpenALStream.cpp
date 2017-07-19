@@ -769,7 +769,7 @@ void COpenALStream::SoundLoop()
         else if (m_bitness == bitfloat && float32_capable)
         {
           palBufferData(m_buffers[next_buffer], AL_FORMAT_MONO_FLOAT32, float_data.data(),
-            static_cast<ALsizei>(available_frames) * FRAME_STEREO_FLOAT, m_frequency);
+            static_cast<ALsizei>(available_frames) * FRAME_MONO_FLOAT, m_frequency);
         }
         break;
       case Stereo:
