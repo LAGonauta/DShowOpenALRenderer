@@ -64,6 +64,8 @@ public:
   STDMETHODIMP Receive(IMediaSample* pSample) override;
   STDMETHODIMP EndOfStream() override;
   STDMETHODIMP ReceiveCanBlock() override;
+  STDMETHODIMP BeginFlush() override;
+  STDMETHODIMP EndFlush() override;
 
 }; // CAudioInputPin
 

@@ -481,6 +481,8 @@ ALenum COpenALStream::CheckALError(std::string desc)
 HRESULT COpenALStream::Stop()
 {
   palSourceStop(m_source);
+  palSourcei(m_source, AL_BUFFER, 0);
+  OutputDebugStringA("Stopped, cleared buffers.\n");
 
   return S_OK;
 }
@@ -572,15 +574,12 @@ std::vector<COpenALStream::MediaBitness> COpenALStream::getSupportedBitness()
 {
   std::vector<MediaBitness> supported_bitness;
 
-  bool float32_capable = palIsExtensionPresent("AL_EXT_float32") != 0;
-  bool fixed32_capable = IsCreativeXFi();
-
-  if (float32_capable)
+  if (palIsExtensionPresent("AL_EXT_float32"))
   {
     supported_bitness.push_back(bitfloat);
   }
 
-  if (fixed32_capable)
+  if (IsCreativeXFi())
   {
     supported_bitness.push_back(bit32);
   }
@@ -616,7 +615,7 @@ void COpenALStream::SoundLoop()
   SpeakerLayout past_speaker_layout = m_speaker_layout;
   MediaBitness past_bitness = m_bitness;
 
-  bool float32_capable = palIsExtensionPresent("AL_EXT_float32") != 0;
+  bool float32_capable = palIsExtensionPresent("AL_EXT_float32");
   bool surround_capable = palIsExtensionPresent("AL_EXT_MCFORMATS") || IsCreativeXFi();
 
   // As there is no extension to check for 32-bit fixed point support
@@ -876,6 +875,11 @@ void COpenALStream::SoundLoop()
         palSourcePlay(m_source);
         err = CheckALError("occurred resuming playback");
         OutputDebugStringA("Buffer underrun\n");
+        {
+            std::ostringstream string;
+            string << "Buffers queued: " << num_buffers_queued << "." << std::endl;
+            OutputDebugStringA(string.str().c_str());
+        }
       }
     }
     else

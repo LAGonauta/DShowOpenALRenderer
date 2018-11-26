@@ -34,7 +34,7 @@
 #endif
 
 // OpenAL requires a minimum of two buffers, three or more recommended
-const size_t OAL_BUFFERS = 2;
+const size_t OAL_BUFFERS = 8;
 
 const size_t MONO_CHANNELS = 1;
 const size_t STEREO_CHANNELS = 2;
@@ -158,7 +158,7 @@ private:
   std::atomic<uint32_t> m_frequency = 48000;
 
   // Get from settings
-  uint32_t m_latency = 48;
+  uint32_t m_latency = 64;
   bool m_muted = false;
 
   // Clocking variables and functions
