@@ -4,7 +4,7 @@
 // Desc: DirectShow sample code - illustration of an audio oscilloscope.  It
 //       shows the waveform graphically as the audio is received by the filter.
 //       The filter is a renderer that can be placed wherever the normal
-//       runtime renderer goes.  It has a single input pin that accepts a 
+//       runtime renderer goes.  It has a single input pin that accepts a
 //       number of different audio formats and renders the data appropriately.
 //
 // Copyright (c) Microsoft Corporation.  All rights reserved.
@@ -67,7 +67,6 @@ int g_cTemplates = sizeof(g_Templates) / sizeof(g_Templates[0]);
 CUnknown * WINAPI COpenALFilter::CreateInstance(LPUNKNOWN pUnk, HRESULT *phr)
 {
   return new COpenALFilter(pUnk, phr);
-
 } // CreateInstance
 
   //
@@ -78,7 +77,7 @@ CUnknown * WINAPI COpenALFilter::CreateInstance(LPUNKNOWN pUnk, HRESULT *phr)
 #pragma warning(disable:4355 4127)
 
 COpenALFilter::COpenALFilter(LPUNKNOWN pUnk, HRESULT *phr) :
-  CBaseFilter(NAME("OpenAL Renderer"), pUnk, (CCritSec *) this, CLSID_OALRend),
+  CBaseFilter(NAME("OpenAL Renderer"), pUnk, (CCritSec *)this, CLSID_OALRend),
   m_mixer(NAME("OpenAL Renderer"), this, phr)
 {
   ASSERT(phr);
@@ -92,9 +91,7 @@ COpenALFilter::COpenALFilter(LPUNKNOWN pUnk, HRESULT *phr) :
   }
 
   m_openal_device = new COpenALStream(&m_mixer, static_cast<IBaseFilter*>(this), phr);
-
 } // (Constructor)
-
 
   //
   // Destructor
@@ -110,9 +107,7 @@ COpenALFilter::~COpenALFilter()
   ASSERT(m_openal_device);
   delete m_openal_device;
   m_openal_device = nullptr;
-
 } // (Destructor)
-
 
   //
   // GetPinCount
@@ -122,9 +117,7 @@ COpenALFilter::~COpenALFilter()
 int COpenALFilter::GetPinCount()
 {
   return 1;
-
 } // GetPinCount
-
 
   //
   // GetPin
@@ -142,9 +135,7 @@ CBasePin *COpenALFilter::GetPin(int n)
   }
 
   return m_pInputPin;
-
 } // GetPin
-
 
   //
   // JoinFilterGraph
@@ -161,9 +152,7 @@ STDMETHODIMP COpenALFilter::JoinFilterGraph(IFilterGraph *pGraph, LPCWSTR pName)
   }
 
   return hr;
-
 } // JoinFilterGraph
-
 
 HRESULT COpenALFilter::NonDelegatingQueryInterface(REFIID riid, void ** ppv)
 {
@@ -236,9 +225,7 @@ STDMETHODIMP COpenALFilter::Stop()
   }
 
   return NOERROR;
-
 } // Stop
-
 
   //
   // Pause
@@ -259,9 +246,7 @@ STDMETHODIMP COpenALFilter::Pause()
   // tell the pin to go inactive and change state
 
   return CBaseFilter::Pause();
-
 } // Pause
-
 
   //
   // Run
@@ -289,7 +274,6 @@ STDMETHODIMP COpenALFilter::Run(REFERENCE_TIME tStart)
   }
 
   return NOERROR;
-
 } // Run
 
 STDMETHODIMP COpenALFilter::SetSyncSource(IReferenceClock * pClock)
@@ -306,9 +290,7 @@ CAudioInputPin::CAudioInputPin(COpenALFilter *pFilter,
   CBaseInputPin(NAME("Audio Input Pin"), pFilter, pFilter, phr, pPinName)
 {
   m_pFilter = pFilter;
-
 } // (Constructor)
-
 
   //
   // Destructor does nothing
@@ -316,7 +298,6 @@ CAudioInputPin::CAudioInputPin(COpenALFilter *pFilter,
 CAudioInputPin::~CAudioInputPin()
 {
 } // (Destructor)
-
 
   //
   // BreakConnect
@@ -333,7 +314,7 @@ HRESULT CAudioInputPin::BreakConnect()
 
   if (m_mt.IsValid() == FALSE)
   {
-    // Don't return an error here, because it could lead to 
+    // Don't return an error here, because it could lead to
     // ASSERT failures when rendering media files in GraphEdit.
     return S_FALSE;
   }
@@ -345,9 +326,7 @@ HRESULT CAudioInputPin::BreakConnect()
   m_mt.SetType(&GUID_NULL);
   m_mt.SetSubtype(&GUID_NULL);
   return CBaseInputPin::BreakConnect();
-
 } // BreakConnect
-
 
 HRESULT CAudioInputPin::CheckOpenALMediaType(const WAVEFORMATEX* wave_format)
 {
@@ -356,117 +335,104 @@ HRESULT CAudioInputPin::CheckOpenALMediaType(const WAVEFORMATEX* wave_format)
 
   // Get supported layout
   auto supported_bitness = m_pFilter->m_openal_device->getSupportedBitness();
-  bool channels_ok = false;
 
   // Get supported bitness
   auto supported_layouts = m_pFilter->m_openal_device->getSupportedSpeakerLayout();
-  bool sampletype_ok = false;
+  bool valid_channel_layout = false;
+  bool valid_sample_type = false;
 
+  // Normalize channels
+  COpenALStream::SpeakerLayout speaker_layout;
   switch (wave_format->nChannels)
   {
   case 1:
-  {
-    if (std::any_of(supported_layouts.cbegin(), supported_layouts.cend(),
-      [](COpenALStream::SpeakerLayout layout) { return layout == COpenALStream::SpeakerLayout::Mono; }))
-    {
-      m_pFilter->m_openal_device->setSpeakerLayout(COpenALStream::SpeakerLayout::Mono);
-      channels_ok = true;
-    }
+    speaker_layout = COpenALStream::SpeakerLayout::Mono;
     break;
-  }
   case 2:
-  {
-    if (std::any_of(supported_layouts.cbegin(), supported_layouts.cend(),
-      [](COpenALStream::SpeakerLayout layout) { return layout == COpenALStream::SpeakerLayout::Stereo; }))
-    {
-      m_pFilter->m_openal_device->setSpeakerLayout(COpenALStream::SpeakerLayout::Stereo);
-      channels_ok = true;
-    }
+    speaker_layout = COpenALStream::SpeakerLayout::Stereo;
     break;
-  }
   case 4:
-  {
-    if (std::any_of(supported_layouts.cbegin(), supported_layouts.cend(),
-      [](COpenALStream::SpeakerLayout layout) { return layout == COpenALStream::SpeakerLayout::Quad; }))
-    {
-      m_pFilter->m_openal_device->setSpeakerLayout(COpenALStream::SpeakerLayout::Quad);
-      channels_ok = true;
-    }
+    speaker_layout = COpenALStream::SpeakerLayout::Quad;
     break;
-  }
   case 6:
-  {
-    if (std::any_of(supported_layouts.cbegin(), supported_layouts.cend(),
-      [](COpenALStream::SpeakerLayout layout) { return layout == COpenALStream::SpeakerLayout::Surround6; }))
-    {
-      m_pFilter->m_openal_device->setSpeakerLayout(COpenALStream::SpeakerLayout::Surround6);
-      channels_ok = true;
-    }
+    speaker_layout = COpenALStream::SpeakerLayout::Surround6;
     break;
-  }
   case 8:
-  {
-    if (std::any_of(supported_layouts.cbegin(), supported_layouts.cend(),
-      [](COpenALStream::SpeakerLayout layout) { return layout == COpenALStream::SpeakerLayout::Surround8; }))
-    {
-      m_pFilter->m_openal_device->setSpeakerLayout(COpenALStream::SpeakerLayout::Surround8);
-      channels_ok = true;
-    }
+    speaker_layout = COpenALStream::SpeakerLayout::Surround8;
     break;
-  }
   }
 
-  if (channels_ok == false)
-      return S_FALSE;
+  if (std::any_of(supported_layouts.cbegin(), supported_layouts.cend(),
+    [speaker_layout](COpenALStream::SpeakerLayout layout) { return layout == speaker_layout; }))
+  {
+    m_pFilter->m_openal_device->setSpeakerLayout(speaker_layout);
+    valid_channel_layout = true;
+  }
+  else
+  {
+    return S_FALSE;
+  }
 
-  switch (wave_format->wBitsPerSample)
+  // Normalize bitness
+  COpenALStream::MediaBitness media_bitness;
+  if (wave_format->wFormatTag == WAVE_FORMAT_EXTENSIBLE)
   {
-  case 8:
-  {
-    if (std::any_of(supported_bitness.cbegin(), supported_bitness.cend(),
-      [](COpenALStream::MediaBitness bitness) { return bitness == COpenALStream::MediaBitness::bit8; }))
+    auto format = reinterpret_cast<const WAVEFORMATEXTENSIBLE*>(wave_format);
+    if (format->SubFormat == KSDATAFORMAT_SUBTYPE_IEEE_FLOAT)
     {
-      m_pFilter->m_openal_device->setBitness(COpenALStream::MediaBitness::bit8);
-      sampletype_ok = true;
+      media_bitness = COpenALStream::MediaBitness::bitfloat;
     }
-    break;
-  }
-  case 16:
-  {
-    if (std::any_of(supported_bitness.cbegin(), supported_bitness.cend(),
-      [](COpenALStream::MediaBitness bitness) { return bitness == COpenALStream::MediaBitness::bit16; }))
+    else if (format->SubFormat == KSDATAFORMAT_SUBTYPE_PCM)
     {
-      m_pFilter->m_openal_device->setBitness(COpenALStream::MediaBitness::bit16);
-      sampletype_ok = true;
-    }
-    break;
-  }
-  case 32:
-  {
-    if (wave_format->wFormatTag == WAVE_FORMAT_IEEE_FLOAT)
-    {
-      if (std::any_of(supported_bitness.cbegin(), supported_bitness.cend(),
-        [](COpenALStream::MediaBitness bitness) { return bitness == COpenALStream::MediaBitness::bitfloat; }))
+      switch (format->Format.wBitsPerSample)
       {
-        m_pFilter->m_openal_device->setBitness(COpenALStream::MediaBitness::bitfloat);
-        sampletype_ok = true;
+      case 8:
+        media_bitness = COpenALStream::MediaBitness::bit8;
+        break;
+      case 16:
+        media_bitness = COpenALStream::MediaBitness::bit16;
+        break;
+      case 24:
+        media_bitness = COpenALStream::MediaBitness::bit24;
+        break;
+      case 32:
+        media_bitness = COpenALStream::MediaBitness::bit32;
+        break;
       }
     }
-    else
-    {
-      if (std::any_of(supported_bitness.cbegin(), supported_bitness.cend(),
-        [](COpenALStream::MediaBitness bitness) { return bitness == COpenALStream::MediaBitness::bit32; }))
-      {
-        m_pFilter->m_openal_device->setBitness(COpenALStream::MediaBitness::bit32);
-        sampletype_ok = true;
-      }
-    }
-    break;
   }
+  else if (wave_format->wFormatTag == WAVE_FORMAT_PCM)
+  {
+    auto format = reinterpret_cast<const PCMWAVEFORMAT*>(wave_format);
+    switch (format->wBitsPerSample)
+    {
+    case 8:
+      media_bitness = COpenALStream::MediaBitness::bit8;
+      break;
+    case 16:
+      media_bitness = COpenALStream::MediaBitness::bit16;
+      break;
+    case 24:
+      media_bitness = COpenALStream::MediaBitness::bit24;
+      break;
+    case 32:
+      media_bitness = COpenALStream::MediaBitness::bit32;
+      break;
+    }
   }
 
-  if (sampletype_ok)
-      return S_OK;
+  if (std::any_of(supported_bitness.cbegin(), supported_bitness.cend(),
+    [media_bitness](COpenALStream::MediaBitness bitness) { return bitness == media_bitness; }))
+  {
+    m_pFilter->m_openal_device->setBitness(media_bitness);
+    valid_sample_type = true;
+  }
+
+  if (valid_channel_layout && valid_sample_type)
+  {
+    return S_OK;
+  }
+
   return S_FALSE;
 }
 
@@ -503,6 +469,17 @@ HRESULT CAudioInputPin::CheckMediaType(const CMediaType *pmt)
   }
 
   m_pFilter->m_mixer.m_is_float = (pwfx->wFormatTag == WAVE_FORMAT_IEEE_FLOAT);
+  if (m_pFilter->m_mixer.m_is_float == false)
+  {
+    if (pwfx->wFormatTag == WAVE_FORMAT_EXTENSIBLE)
+    {
+      auto format = reinterpret_cast<const WAVEFORMATEXTENSIBLE*>(pwfx);
+      if (format->SubFormat == KSDATAFORMAT_SUBTYPE_IEEE_FLOAT)
+      {
+        m_pFilter->m_mixer.m_is_float = true;
+      }
+    }
+  }
 
   // Check if our OpenAL driver supports it
   auto hr = CheckOpenALMediaType(pwfx);
@@ -512,9 +489,7 @@ HRESULT CAudioInputPin::CheckMediaType(const CMediaType *pmt)
   }
 
   return S_FALSE;
-
 } // CheckMediaType
-
 
   //
   // SetMediaType
@@ -547,9 +522,7 @@ HRESULT CAudioInputPin::SetMediaType(const CMediaType *pmt)
   }
 
   return hr;
-
 } // SetMediaType
-
 
   //
   // Active
@@ -559,9 +532,7 @@ HRESULT CAudioInputPin::SetMediaType(const CMediaType *pmt)
 HRESULT CAudioInputPin::Active(void)
 {
   return NOERROR;
-
 } // Active
-
 
   //
   // Inactive
@@ -571,9 +542,7 @@ HRESULT CAudioInputPin::Active(void)
 HRESULT CAudioInputPin::Inactive(void)
 {
   return NOERROR;
-
 } // Inactive
-
 
   //
   // Receive
@@ -621,12 +590,10 @@ HRESULT CAudioInputPin::Receive(IMediaSample * pSample)
 
     //if (m_eosUp)
     //  return S_FALSE;
-
   }
 
   // Send the sample to the video window object for rendering
   return m_pFilter->m_mixer.Receive(pSample);
-
 } // Receive
 
 STDMETHODIMP CAudioInputPin::EndOfStream()
@@ -677,9 +644,7 @@ CMixer::CMixer(TCHAR *pName, COpenALFilter *pRenderer, HRESULT *phr) :
   m_LastMediaSampleSize(0)
 {
   ASSERT(m_pRenderer);
-
 } // (Constructor)
-
 
   //
   // Destructor
@@ -689,9 +654,7 @@ CMixer::~CMixer()
   // Ensure we stop streaming and release any samples
 
   StopStreaming();
-
 } // (Destructor)
-
 
   //
   // StartStreaming
@@ -711,9 +674,7 @@ HRESULT CMixer::StartStreaming()
 
   m_bStreaming = true;
   return NOERROR;
-
 } // StartStreaming
-
 
   //
   // StopStreaming
@@ -733,7 +694,6 @@ HRESULT CMixer::StopStreaming()
 
   m_bStreaming = false;
   return NOERROR;
-
 } // StopStreaming
 
 bool CMixer::IsStreaming()
@@ -852,7 +812,6 @@ void CMixer::CopyWaveform(IMediaSample *pMediaSample)
     // We already delivered them, set it back to false
     m_request_samples = false;
   }
-
 } // CopyWaveform
 
   //
@@ -882,7 +841,6 @@ HRESULT CMixer::Receive(IMediaSample *pSample)
   }
 
   return NOERROR;
-
 } // Receive
 
 HRESULT CMixer::WaitForFrames(size_t num_of_bits)
@@ -1096,10 +1054,9 @@ size_t CMixer::Mix(std::vector<float_t>* samples, size_t num_frames)
   return effective_samples / m_nChannels;
 }
 
-
 ////////////////////////////////////////////////////////////////////////
 //
-// Exported entry points for registration and unregistration 
+// Exported entry points for registration and unregistration
 // (in this case they only call through to default implementations).
 //
 ////////////////////////////////////////////////////////////////////////
@@ -1112,9 +1069,7 @@ size_t CMixer::Mix(std::vector<float_t>* samples, size_t num_frames)
 STDAPI DllRegisterServer()
 {
   return AMovieDllRegisterServer2(TRUE);
-
 } // DllRegisterServer
-
 
   //
   // DllUnregisterServer
@@ -1122,9 +1077,7 @@ STDAPI DllRegisterServer()
 STDAPI DllUnregisterServer()
 {
   return AMovieDllRegisterServer2(FALSE);
-
 } // DllUnregisterServer
-
 
   //
   // DllEntryPoint
@@ -1137,4 +1090,3 @@ BOOL APIENTRY DllMain(HANDLE hModule,
 {
   return DllEntryPoint((HINSTANCE)(hModule), dwReason, lpReserved);
 }
-
