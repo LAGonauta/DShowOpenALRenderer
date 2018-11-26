@@ -199,7 +199,6 @@ void COpenALStream::SetSyncSource(IReferenceClock * pClock)
 
       DbgLog((LOG_TRACE, 1, TEXT("*** USING OUR CLOCK : reference is %d at tgt %d"),
         (DWORD)(MILLISECONDS * m_rtPrivateTime / UNITS), m_LastTickTime));
-
     }
     else
     {
@@ -324,7 +323,7 @@ STDMETHODIMP COpenALStream::OpenDevice(void)
 
   {
     std::ostringstream string;
-    string << "Found OpenAL device \"" << devices[0].c_str() << "\"."<< std::endl;
+    string << "Found OpenAL device \"" << devices[0].c_str() << "\"." << std::endl;
     OutputDebugStringA(string.str().c_str());
   }
 
@@ -609,6 +608,104 @@ std::vector<COpenALStream::SpeakerLayout> COpenALStream::getSupportedSpeakerLayo
   return supported_layouts;
 }
 
+std::string GenerateFormatString(COpenALStream::SpeakerLayout speaker_layout, COpenALStream::MediaBitness bitness)
+{
+  std::string result = "AL_FORMAT_";
+
+  switch (speaker_layout)
+  {
+  case COpenALStream::SpeakerLayout::Mono:
+    result.append("MONO");
+    break;
+  case COpenALStream::SpeakerLayout::Stereo:
+    result.append("STEREO");
+    break;
+  case COpenALStream::SpeakerLayout::Quad:
+    result.append("QUAD");
+    break;
+  case COpenALStream::SpeakerLayout::Surround6:
+    result.append("51CHN");
+    break;
+  case COpenALStream::SpeakerLayout::Surround8:
+    result.append("71CHN");
+    break;
+  }
+
+  switch (bitness)
+  {
+  case COpenALStream::MediaBitness::bit8:
+    result.append("8");
+    break;
+  case COpenALStream::MediaBitness::bit16:
+    result.append("16");
+    break;
+  case COpenALStream::MediaBitness::bit24:
+    //result.append("QUAD");
+    break;
+  case COpenALStream::MediaBitness::bit32:
+    result.append("32");
+    break;
+  case COpenALStream::MediaBitness::bitfloat:
+    if (speaker_layout == COpenALStream::SpeakerLayout::Stereo ||
+      speaker_layout == COpenALStream::SpeakerLayout::Mono)
+    {
+      result.append("_FLOAT32");
+    }
+    else
+    {
+      result.append("32");
+    }
+    break;
+  }
+
+  return result;
+}
+
+size_t GetFrameSize(COpenALStream::SpeakerLayout speaker_layout, COpenALStream::MediaBitness bitness)
+{
+  size_t num_channels = 0;
+  size_t element_size = 0;
+  switch (bitness)
+  {
+  case COpenALStream::MediaBitness::bit8:
+    element_size = sizeof(ALbyte);
+    break;
+  case COpenALStream::MediaBitness::bit16:
+    element_size = sizeof(ALshort);
+    break;
+  case COpenALStream::MediaBitness::bit24:
+    element_size = sizeof(ALint);
+    break;
+  case COpenALStream::MediaBitness::bit32:
+    element_size = sizeof(ALint);
+    break;
+  case COpenALStream::MediaBitness::bitfloat:
+    element_size = sizeof(ALfloat);
+    break;
+  }
+
+  switch (speaker_layout)
+  {
+  case COpenALStream::SpeakerLayout::Mono:
+    num_channels = 1;
+    break;
+  case COpenALStream::SpeakerLayout::Stereo:
+    num_channels = 2;
+    break;
+  case COpenALStream::SpeakerLayout::Quad:
+    num_channels = 4;
+    break;
+  case COpenALStream::SpeakerLayout::Surround6:
+    num_channels = 6;
+    break;
+  case COpenALStream::SpeakerLayout::Surround8:
+    num_channels = 8;
+    break;
+  }
+
+  return num_channels * element_size;
+}
+
 void COpenALStream::SoundLoop()
 {
   uint32_t past_frequency = m_frequency;
@@ -726,19 +823,24 @@ void COpenALStream::SoundLoop()
       //ClockController();
 
       size_t available_frames = 0;
+      void* audio_data = nullptr;
       switch (m_bitness)
       {
       case bit8:
         available_frames = m_mixer->Mix(&byte_data, frames_per_buffer);
+        audio_data = byte_data.data();
         break;
       case bit16:
         available_frames = m_mixer->Mix(&short_data, frames_per_buffer);
+        audio_data = short_data.data();
         break;
       case bit32:
         available_frames = m_mixer->Mix(&long_data, frames_per_buffer);
+        audio_data = long_data.data();
         break;
       case bitfloat:
         available_frames = m_mixer->Mix(&float_data, frames_per_buffer);
+        audio_data = float_data.data();
         break;
       }
 
@@ -747,119 +849,12 @@ void COpenALStream::SoundLoop()
         continue;
       }
 
-      switch (m_speaker_layout)
-      {
-      case Mono:
-        if (m_bitness == bit8)
-        {
-          palBufferData(m_buffers[next_buffer], AL_FORMAT_MONO8, byte_data.data(),
-            static_cast<ALsizei>(available_frames) * FRAME_MONO_BYTE, m_frequency);
-        }
-        else if (m_bitness == bit16)
-        {
-          palBufferData(m_buffers[next_buffer], AL_FORMAT_MONO16, short_data.data(),
-            static_cast<ALsizei>(available_frames) * FRAME_MONO_SHORT, m_frequency);
-        }
-        else if (m_bitness == bit32 && fixed32_capable)
-        {
-          palBufferData(m_buffers[next_buffer], palGetEnumValue("AL_FORMAT_MONO32"), long_data.data(),
-            static_cast<ALsizei>(available_frames) * FRAME_MONO_INT32, m_frequency);
-        }
-        else if (m_bitness == bitfloat && float32_capable)
-        {
-          palBufferData(m_buffers[next_buffer], AL_FORMAT_MONO_FLOAT32, float_data.data(),
-            static_cast<ALsizei>(available_frames) * FRAME_MONO_FLOAT, m_frequency);
-        }
-        break;
-      case Stereo:
-        if (m_bitness == bit8)
-        {
-          palBufferData(m_buffers[next_buffer], AL_FORMAT_STEREO8, byte_data.data(),
-            static_cast<ALsizei>(available_frames) * FRAME_STEREO_BYTE, m_frequency);
-        }
-        else if (m_bitness == bit16)
-        {
-          palBufferData(m_buffers[next_buffer], AL_FORMAT_STEREO16, short_data.data(),
-            static_cast<ALsizei>(available_frames) * FRAME_STEREO_SHORT, m_frequency);
-        }
-        else if (m_bitness == bit32 && fixed32_capable)
-        {
-          palBufferData(m_buffers[next_buffer], AL_FORMAT_STEREO32, long_data.data(),
-            static_cast<ALsizei>(available_frames) * FRAME_STEREO_INT32, m_frequency);
-        }
-        else if (m_bitness == bitfloat && float32_capable)
-        {
-          palBufferData(m_buffers[next_buffer], AL_FORMAT_STEREO_FLOAT32, float_data.data(),
-            static_cast<ALsizei>(available_frames) * FRAME_STEREO_FLOAT, m_frequency);
-        }
-        break;
-      case Quad:
-        if (m_bitness == bit8)
-        {
-          palBufferData(m_buffers[next_buffer], palGetEnumValue("AL_FORMAT_QUAD8"), byte_data.data(),
-            static_cast<ALsizei>(available_frames) * FRAME_QUAD_BYTE, m_frequency);
-        }
-        else if (m_bitness == bit16)
-        {
-          palBufferData(m_buffers[next_buffer], palGetEnumValue("AL_FORMAT_QUAD16"), short_data.data(),
-            static_cast<ALsizei>(available_frames) * FRAME_QUAD_SHORT, m_frequency);
-        }
-        else if (m_bitness == bit32 && fixed32_capable)
-        {
-          palBufferData(m_buffers[next_buffer], palGetEnumValue("AL_FORMAT_QUAD32"), long_data.data(),
-            static_cast<ALsizei>(available_frames) * FRAME_QUAD_INT32, m_frequency);
-        }
-        else if (m_bitness == bitfloat && float32_capable)
-        {
-          palBufferData(m_buffers[next_buffer], palGetEnumValue("AL_FORMAT_QUAD32"), float_data.data(),
-            static_cast<ALsizei>(available_frames) * FRAME_QUAD_FLOAT, m_frequency);
-        }
-        break;
-      case Surround6:
-        if (m_bitness == bit8)
-        {
-          palBufferData(m_buffers[next_buffer], palGetEnumValue("AL_FORMAT_51CHN8"), byte_data.data(),
-            static_cast<ALsizei>(available_frames) * FRAME_SURROUND6_BYTE, m_frequency);
-        }
-        else if (m_bitness == bit16)
-        {
-          palBufferData(m_buffers[next_buffer], AL_FORMAT_51CHN16, short_data.data(),
-            static_cast<ALsizei>(available_frames) * FRAME_SURROUND6_SHORT, m_frequency);
-        }
-        else if (m_bitness == bit32 && fixed32_capable)
-        {
-          palBufferData(m_buffers[next_buffer], AL_FORMAT_51CHN32, long_data.data(),
-            static_cast<ALsizei>(available_frames) * FRAME_SURROUND6_INT32, m_frequency);
-        }
-        else if (m_bitness == bitfloat && float32_capable)
-        {
-          palBufferData(m_buffers[next_buffer], AL_FORMAT_51CHN32, float_data.data(),
-            static_cast<ALsizei>(available_frames) * FRAME_SURROUND6_FLOAT, m_frequency);
-        }
-        break;
-      case Surround8:
-        if (m_bitness == bit8)
-        {
-          palBufferData(m_buffers[next_buffer], palGetEnumValue("AL_FORMAT_71CHN8"), byte_data.data(),
-            static_cast<ALsizei>(available_frames) * FRAME_SURROUND8_BYTE, m_frequency);
-        }
-        else if (m_bitness == bit16)
-        {
-          palBufferData(m_buffers[next_buffer], palGetEnumValue("AL_FORMAT_71CHN16"), short_data.data(),
-            static_cast<ALsizei>(available_frames) * FRAME_SURROUND8_SHORT, m_frequency);
-        }
-        else if (m_bitness == bit32 && fixed32_capable)
-        {
-          palBufferData(m_buffers[next_buffer], palGetEnumValue("AL_FORMAT_71CHN32"), long_data.data(),
-            static_cast<ALsizei>(available_frames) * FRAME_SURROUND8_INT32, m_frequency);
-        }
-        else if (m_bitness == bitfloat && float32_capable)
-        {
-          palBufferData(m_buffers[next_buffer], palGetEnumValue("AL_FORMAT_71CHN32"), float_data.data(),
-            static_cast<ALsizei>(available_frames) * FRAME_SURROUND8_FLOAT, m_frequency);
-        }
-        break;
-      }
+      palBufferData(m_buffers[next_buffer],
+        palGetEnumValue(GenerateFormatString(m_speaker_layout, m_bitness).c_str()),
+        audio_data,
+        static_cast<ALsizei>(available_frames) * GetFrameSize(m_speaker_layout, m_bitness),
+        m_frequency);
+
       err = CheckALError("buffering data");
 
       palSourceQueueBuffers(m_source, 1, &m_buffers[next_buffer]);
@@ -876,9 +871,9 @@ void COpenALStream::SoundLoop()
         err = CheckALError("occurred resuming playback");
         OutputDebugStringA("Buffer underrun\n");
         {
-            std::ostringstream string;
-            string << "Buffers queued: " << num_buffers_queued << "." << std::endl;
-            OutputDebugStringA(string.str().c_str());
+          std::ostringstream string;
+          string << "Buffers queued: " << num_buffers_queued << "." << std::endl;
+          OutputDebugStringA(string.str().c_str());
         }
       }
     }

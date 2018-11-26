@@ -36,42 +36,6 @@
 // OpenAL requires a minimum of two buffers, three or more recommended
 const size_t OAL_BUFFERS = 8;
 
-const size_t MONO_CHANNELS = 1;
-const size_t STEREO_CHANNELS = 2;
-const size_t QUAD_CHANNELS = 4;
-const size_t SURROUND6_CHANNELS = 6;
-const size_t SURROUND8_CHANNELS = 8;
-
-const size_t SIZE_BYTE = 1;
-const size_t SIZE_SHORT = 2;
-const size_t SIZE_INT32 = 4;
-const size_t SIZE_FLOAT = 4;  // size in bytes
-
-const size_t FRAME_MONO_BYTE = MONO_CHANNELS * SIZE_BYTE;
-const size_t FRAME_MONO_SHORT = MONO_CHANNELS * SIZE_SHORT;
-const size_t FRAME_MONO_INT32 = MONO_CHANNELS * SIZE_INT32;
-const size_t FRAME_MONO_FLOAT = MONO_CHANNELS * SIZE_FLOAT;
-
-const size_t FRAME_STEREO_BYTE = STEREO_CHANNELS * SIZE_BYTE;
-const size_t FRAME_STEREO_SHORT = STEREO_CHANNELS * SIZE_SHORT;
-const size_t FRAME_STEREO_INT32 = STEREO_CHANNELS * SIZE_INT32;
-const size_t FRAME_STEREO_FLOAT = STEREO_CHANNELS * SIZE_FLOAT;
-
-const size_t FRAME_QUAD_BYTE = QUAD_CHANNELS * SIZE_BYTE;
-const size_t FRAME_QUAD_SHORT = QUAD_CHANNELS * SIZE_SHORT;
-const size_t FRAME_QUAD_INT32 = QUAD_CHANNELS * SIZE_INT32;
-const size_t FRAME_QUAD_FLOAT = QUAD_CHANNELS * SIZE_FLOAT;
-
-const size_t FRAME_SURROUND6_BYTE = SURROUND6_CHANNELS * SIZE_BYTE;
-const size_t FRAME_SURROUND6_SHORT = SURROUND6_CHANNELS * SIZE_SHORT;
-const size_t FRAME_SURROUND6_INT32 = SURROUND6_CHANNELS * SIZE_INT32;
-const size_t FRAME_SURROUND6_FLOAT = SURROUND6_CHANNELS * SIZE_FLOAT;
-
-const size_t FRAME_SURROUND8_BYTE = SURROUND8_CHANNELS * SIZE_BYTE;
-const size_t FRAME_SURROUND8_SHORT = SURROUND8_CHANNELS * SIZE_SHORT;
-const size_t FRAME_SURROUND8_INT32 = SURROUND8_CHANNELS * SIZE_INT32;
-const size_t FRAME_SURROUND8_FLOAT = SURROUND8_CHANNELS * SIZE_FLOAT;
-
 class CMixer;
 
 class COpenALStream final : public CBaseReferenceClock, public CBasicAudio
@@ -107,7 +71,7 @@ public:
 
   void SetSyncSource(IReferenceClock *pClock);
   void ClockController(HDRVR hdrvr, DWORD_PTR dwUser,
-                       DWORD_PTR dw2);
+    DWORD_PTR dw2);
 
   IUnknown * pUnk()
   {
