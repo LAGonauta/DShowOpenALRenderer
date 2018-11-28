@@ -583,9 +583,6 @@ HRESULT CAudioInputPin::Receive(IMediaSample * pSample)
 
       // Clear queues
       m_pFilter->m_mixer.m_sample_queue.clear();
-      m_pFilter->m_mixer.m_sample_queue_8bit.clear();
-      m_pFilter->m_mixer.m_sample_queue_32bit.clear();
-      m_pFilter->m_mixer.m_sample_queue_float.clear();
     }
 
     //if (m_eosUp)
@@ -614,9 +611,6 @@ STDMETHODIMP CAudioInputPin::BeginFlush()
   CAutoLock receiveLock(&m_receiveMutex);
 
   m_pFilter->m_mixer.m_sample_queue.clear();
-  m_pFilter->m_mixer.m_sample_queue_8bit.clear();
-  m_pFilter->m_mixer.m_sample_queue_32bit.clear();
-  m_pFilter->m_mixer.m_sample_queue_float.clear();
 
   return S_OK;
 }
@@ -702,19 +696,16 @@ bool CMixer::IsStreaming()
 }
 
 //
-// CopyWaveform
+// CopyWaveformToBuffer
 //
-// Copy the current MediaSample into a POINT array so we can use GDI
-// to paint the waveform.  The POINT array contains a 1 second history
-// of the past waveform.  The "Y" values are normalized to a range of
-// +128 to -127 within the POINT array.
-//
+// Little endian?
+
 void CMixer::CopyWaveform(IMediaSample *pMediaSample)
 {
   //waitobject
+  constexpr size_t bits_per_byte = 8;
   BYTE *pWave;                // Pointer to image data
   int  nBytes;
-  int  nSamplesPerChan;
 
   ASSERT(pMediaSample);
   if (!pMediaSample)
@@ -724,78 +715,25 @@ void CMixer::CopyWaveform(IMediaSample *pMediaSample)
   ASSERT(pWave != nullptr);
 
   nBytes = pMediaSample->GetActualDataLength();
-  nSamplesPerChan = nBytes / m_nBlockAlign;
+  nBytes = nBytes - nBytes % (m_nChannels * m_nBitsPerSample / bits_per_byte);
 
-  size_t pushed_samples = 0;
-  if (m_nBitsPerSample == 8)
+  size_t pushed_bytes = 0;
+  BYTE* pb = pWave;
   {
-    BYTE* pb = pWave;
-
-    while (nSamplesPerChan--)
+    uint8_t value = 0;
+    for (int i = 0; i < nBytes; ++i)
     {
-      uint8_t value = 0;
-      for (int i = 0; i < m_nChannels; ++i)
-      {
-        value = *pb++;
-        m_sample_queue_8bit.push(value);
-        ++pushed_samples;
-      }
-    }
-  }
-  else if (m_nBitsPerSample == 16)
-  {
-    WORD* pw = (WORD*)pWave;
-
-    while (nSamplesPerChan--)
-    {
-      uint16_t value = 0;
-      for (int i = 0; i < m_nChannels; ++i)
-      {
-        value = *pw++;
-        m_sample_queue.push(value);
-        ++pushed_samples;
-      }
-    }
-  }
-  else if (m_nBitsPerSample == 32)
-  {
-    if (m_is_float)
-    {
-      float_t* pdw = (float_t*)pWave;
-
-      while (nSamplesPerChan--)
-      {
-        float_t value = 0;
-        for (int i = 0; i < m_nChannels; ++i)
-        {
-          value = *pdw++;
-          m_sample_queue_float.push(value);
-          ++pushed_samples;
-        }
-      }
-    }
-    else
-    {
-      DWORD* pdw = (DWORD*)pWave;
-
-      while (nSamplesPerChan--)
-      {
-        uint32_t value = 0;
-        for (int i = 0; i < m_nChannels; ++i)
-        {
-          value = *pdw++;
-          m_sample_queue_32bit.push(value);
-          ++pushed_samples;
-        }
-      }
+      value = *pb++;
+      m_sample_queue.push(value);
+      ++pushed_bytes;
     }
   }
 
   // Locking between inbound samples and the mixer
-  m_rendered_samples = pushed_samples;
+  m_rendered_samples = pushed_bytes / m_nChannels / m_nBitsPerSample * bits_per_byte;
 
   //std::ostringstream string;
-  //string << "Size of the queue: " << pushed_samples / m_nChannels << " frames.\n";
+  //string << "Size of the queue: " << pushed_bytes / m_nChannels / m_nBitsPerSample * bits_per_byte << " frames.\n";
   //OutputDebugStringA(string.str().c_str());
 
   m_samples_ready = true;
@@ -814,12 +752,12 @@ void CMixer::CopyWaveform(IMediaSample *pMediaSample)
   }
 } // CopyWaveform
 
-  //
-  // Receive
-  //
-  // Called when the input pin receives another sample.
-  // Copy the waveform to our circular 1 second buffer
-  //
+//
+// Receive
+//
+// Called when the input pin receives another sample.
+// Copy the waveform to our circular 1 second buffer
+//
 HRESULT CMixer::Receive(IMediaSample *pSample)
 {
   CheckPointer(pSample, E_POINTER);
@@ -876,27 +814,28 @@ HRESULT CMixer::WaitForFrames(size_t num_of_bits)
   }
 }
 
-size_t CMixer::Mix(std::vector<int8_t>* samples, size_t num_frames)
+size_t CMixer::Mix(std::vector<int8_t>* samples, size_t num_frames, size_t num_bytes_per_sample)
 {
   if (!samples)
     return 0;
 
   // 2 = stereo
   // 6 = 5.1
-  m_desired_samples = num_frames * m_nChannels;
-  samples->resize(m_desired_samples);
+  m_desired_bytes = num_frames * m_nChannels * num_bytes_per_sample;
+  samples->resize(m_desired_bytes);
 
   // Wait for queue to fill
   size_t effective_samples = 0;
 
   // Still need to check EOS
   bool all_ok = false;
-  while (m_sample_queue_8bit.unsafe_size() < m_desired_samples) //&& m_notEOS)
+  while (m_sample_queue.unsafe_size() < m_desired_bytes) //&& m_notEOS)
   {
     m_request_samples = true;
     m_request_samples_cv.notify_one();
 
-    if (WaitForFrames(8) == S_OK)
+    constexpr size_t bits_per_byte = 8;
+    if (WaitForFrames(num_bytes_per_sample * bits_per_byte) == S_OK)
     {
       all_ok = true;
     }
@@ -906,150 +845,16 @@ size_t CMixer::Mix(std::vector<int8_t>* samples, size_t num_frames)
     }
   }
 
-  for (size_t i = 0; i < m_desired_samples; ++i)
+  for (size_t i = 0; i < m_desired_bytes; ++i)
   {
     int8_t value = 0;
-    if (m_sample_queue_8bit.try_pop(value))
-    {
-      (*samples)[i] = value;
-    }
-  }
-  // Set EOS samples here
-  effective_samples = m_desired_samples;
-
-  return effective_samples / m_nChannels;
-}
-
-size_t CMixer::Mix(std::vector<int16_t>* samples, size_t num_frames)
-{
-  if (!samples)
-    return 0;
-
-  // 2 = stereo
-  // 6 = 5.1
-  m_desired_samples = num_frames * m_nChannels;
-  samples->resize(m_desired_samples);
-
-  // Wait for queue to fill
-  size_t effective_samples = 0;
-
-  // Still need to check EOS
-  bool all_ok = false;
-  while (m_sample_queue.unsafe_size() < m_desired_samples) //&& m_notEOS)
-  {
-    m_request_samples = true;
-    m_request_samples_cv.notify_one();
-
-    if (WaitForFrames(16) == S_OK)
-    {
-      all_ok = true;
-    }
-    else
-    {
-      break;
-    }
-  }
-
-  for (size_t i = 0; i < m_desired_samples; ++i)
-  {
-    int16_t value = 0;
     if (m_sample_queue.try_pop(value))
     {
       (*samples)[i] = value;
     }
   }
   // Set EOS samples here
-  effective_samples = m_desired_samples;
-
-  return effective_samples / m_nChannels;
-}
-
-size_t CMixer::Mix(std::vector<int32_t>* samples, size_t num_frames)
-{
-  if (!samples)
-    return 0;
-
-  // 2 = stereo
-  // 6 = 5.1
-  m_desired_samples = num_frames * m_nChannels;
-  samples->resize(m_desired_samples);
-
-  // Wait for queue to fill
-  size_t effective_samples = 0;
-
-  // Still need to check EOS
-  bool all_ok = false;
-  while (m_sample_queue_32bit.unsafe_size() < m_desired_samples) //&& m_notEOS)
-  {
-    m_request_samples = true;
-    m_request_samples_cv.notify_one();
-
-    if (WaitForFrames(32) == S_OK)
-    {
-      all_ok = true;
-    }
-    else
-    {
-      break;
-    }
-  }
-
-  for (size_t i = 0; i < m_desired_samples; ++i)
-  {
-    int32_t value = 0;
-    if (m_sample_queue_32bit.try_pop(value))
-    {
-      (*samples)[i] = value;
-    }
-  }
-
-  // Set EOS samples here
-  effective_samples = m_desired_samples;
-
-  return effective_samples / m_nChannels;
-}
-
-size_t CMixer::Mix(std::vector<float_t>* samples, size_t num_frames)
-{
-  if (!samples)
-    return 0;
-
-  // 2 = stereo
-  // 6 = 5.1
-  m_desired_samples = num_frames * m_nChannels;
-  samples->resize(m_desired_samples);
-
-  // Wait for queue to fill
-  size_t effective_samples = 0;
-
-  // Still need to check EOS
-  bool all_ok = false;
-  while (m_sample_queue_float.unsafe_size() < m_desired_samples) //&& m_notEOS)
-  {
-    m_request_samples = true;
-    m_request_samples_cv.notify_one();
-
-    if (WaitForFrames(32) == S_OK)
-    {
-      all_ok = true;
-    }
-    else
-    {
-      break;
-    }
-  }
-
-  for (size_t i = 0; i < m_desired_samples; ++i)
-  {
-    float_t value = 0;
-    if (m_sample_queue_float.try_pop(value))
-    {
-      (*samples)[i] = value;
-    }
-  }
-
-  // Set EOS samples here
-  effective_samples = m_desired_samples;
+  effective_samples = m_desired_bytes / num_bytes_per_sample;
 
   return effective_samples / m_nChannels;
 }

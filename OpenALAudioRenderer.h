@@ -21,8 +21,6 @@ class COpenALFilter;
 class CMixer;
 class COpenALOutput;
 
-// Class supporting the scope input pin
-
 class CAudioInputPin : public CCritSec, public CBaseInputPin
 {
   friend class COpenALFilter;
@@ -69,23 +67,6 @@ public:
 
 }; // CAudioInputPin
 
-
-   // This class looks after the management of a window. When the class gets
-   // instantiated the constructor spawns off a worker thread that does all
-   // the window work. The original thread waits until it is signaled to
-   // continue. The worker thread first registers the window class if it
-   // is not already done. Then it creates a window and sets it's size to
-   // a default iWidth by iHeight dimensions. The worker thread MUST be the
-   // one who creates the window as it is the one who calls GetMessage. When
-   // it has done all this it signals the original thread which lets it
-   // continue, this ensures a window is created and valid before the
-   // constructor returns. The thread start address is the WindowMessageLoop
-   // function. This takes as it's initialisation parameter a pointer to the
-   // CVideoWindow object that created it, the function also initialises it's
-   // window related member variables such as the handle and device contexts
-
-   // These are the video window styles
-
 class CMixer : public CCritSec
 {
   friend class CAudioInputPin;
@@ -94,9 +75,9 @@ class CMixer : public CCritSec
 private:
 
   HINSTANCE m_hInstance;          // Global module instance handle
-  COpenALFilter* m_pRenderer;      // The owning renderer object
+  COpenALFilter* m_pRenderer;     // The owning renderer object
 
-  std::atomic<bool> m_bStreaming;              // Are we currently streaming
+  std::atomic<bool> m_bStreaming; // Are we currently streaming
 
   int m_LastMediaSampleSize;      // Size of last MediaSample
 
@@ -105,15 +86,12 @@ private:
   int m_nBitsPerSample;           // Number bits per sample
   bool m_is_float;
   int m_nBlockAlign;              // Alignment on the samples
-  size_t m_desired_samples = 0;
+  size_t m_desired_bytes = 0;
 
   void CopyWaveform(IMediaSample *pMediaSample);
   HRESULT CMixer::WaitForFrames(size_t num_of_bits);
 
-  concurrency::concurrent_queue<int16_t> m_sample_queue;
-  concurrency::concurrent_queue<int8_t> m_sample_queue_8bit;
-  concurrency::concurrent_queue<int32_t> m_sample_queue_32bit;
-  concurrency::concurrent_queue<float_t> m_sample_queue_float;
+  concurrency::concurrent_queue<int8_t> m_sample_queue;
 
   // Locking between inbound samples and the mixer
   std::atomic<size_t> m_rendered_samples = 0;
@@ -139,18 +117,13 @@ public:
 
   // Called when the input pin receives a sample
   HRESULT Receive(IMediaSample* pIn);
-  size_t Mix(std::vector<int8_t>* samples, size_t num_frames);
-  size_t Mix(std::vector<int16_t>* samples, size_t num_frames);
-  size_t Mix(std::vector<int32_t>* samples, size_t num_frames);
-  size_t Mix(std::vector<float_t>* samples, size_t num_frames);
-
+  size_t Mix(std::vector<int8_t>* samples, size_t num_frames, size_t num_bytes_per_sample);
 }; // CMixer
 
    // This is the COM object that represents the oscilloscope filter
 
 class COpenALFilter : public CBaseFilter, public CCritSec
 {
-
 public:
   // Implements the IBaseFilter and IMediaFilter interfaces
 
@@ -189,7 +162,7 @@ private:
   friend class COpenALOutput;
 
   CAudioInputPin *m_pInputPin;   // Handles pin interfaces
-  CMixer m_mixer;         // Looks after the window
+  CMixer m_mixer;                // Looks after the window
   IUnknownPtr m_seeking;
 
 }; // COpenALFilter

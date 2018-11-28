@@ -13,26 +13,6 @@
 #include "streams.h"
 #endif
 
-// From AL_EXT_float32
-#ifndef AL_FORMAT_STEREO_FLOAT32
-#define AL_FORMAT_MONO_FLOAT32 0x10010
-#define AL_FORMAT_STEREO_FLOAT32 0x10011
-#endif
-
-// From AL_EXT_MCFORMATS
-#ifndef AL_FORMAT_51CHN16
-#define AL_FORMAT_51CHN16 0x120B
-#endif
-#ifndef AL_FORMAT_51CHN32
-#define AL_FORMAT_51CHN32 0x120C
-#endif
-
-// Only X-Fi on Windows supports the alext AL_FORMAT_STEREO32 alext for now,
-// but it is not documented or in "OpenAL/include/al.h".
-#ifndef AL_FORMAT_STEREO32
-#define AL_FORMAT_STEREO32 0x1203
-#endif
-
 // OpenAL requires a minimum of two buffers, three or more recommended
 const size_t OAL_BUFFERS = 8;
 
@@ -98,6 +78,9 @@ public:
   MediaBitness getBitness();
   std::vector<MediaBitness> getSupportedBitness();
   std::vector<SpeakerLayout> getSupportedSpeakerLayout();
+  // In milliseconds
+  REFERENCE_TIME getSampleTime();
+  HRESULT resetSampleTime();
 
 private:
   STDMETHODIMP isValid();
@@ -111,15 +94,17 @@ private:
   ALenum CheckALError(std::string desc);
 
   uint32_t num_buffers = OAL_BUFFERS;
+  uint32_t num_buffers_queued = 0;
 
   std::vector<ALuint> m_buffers;
+  std::atomic<size_t> m_total_buffered = 0;
   ALuint m_source = 0;
   std::atomic<ALfloat> m_volume = 1.0f;
 
   CMixer* m_mixer;
   std::atomic<SpeakerLayout> m_speaker_layout = Surround6;
   std::atomic<MediaBitness> m_bitness = bit16;
-  std::atomic<uint32_t> m_frequency = 48000;
+  std::atomic<ALsizei> m_frequency = 48000;
 
   // Get from settings
   uint32_t m_latency = 64;
