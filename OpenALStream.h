@@ -4,24 +4,13 @@
 
 #pragma once
 
-#include <atomic>
-
 #include <include/OpenAL/al.h>
 #include <include/OpenAL/alc.h>
 
-#ifndef __STREAMS__
-#include "streams.h"
-#endif
-
 // OpenAL requires a minimum of two buffers, three or more recommended
-const size_t OAL_BUFFERS = 8;
-
-class CMixer;
-
-class COpenALStream final : public CBaseReferenceClock, public CBasicAudio
+constexpr size_t OAL_BUFFERS = 8;
+class COpenALStream : public CBasicAudio
 {
-  friend class CMixer;
-
 public:
   enum SpeakerLayout
   {
@@ -47,16 +36,6 @@ public:
   // We must make this time depend on the sound card buffers latter,
   // not on the system clock
   //REFERENCE_TIME GetPrivateTime() override;
-  //HRESULT SetTimeDelta(const REFERENCE_TIME &TimeDelta);
-
-  void SetSyncSource(IReferenceClock *pClock);
-  void ClockController(HDRVR hdrvr, DWORD_PTR dwUser,
-    DWORD_PTR dw2);
-
-  IUnknown * pUnk()
-  {
-    return static_cast<IUnknown*>(static_cast<IReferenceClock*>(this));
-  }
 
   STDMETHODIMP OpenDevice();
   STDMETHODIMP CloseDevice();
@@ -109,24 +88,4 @@ private:
   // Get from settings
   uint32_t m_latency = 64;
   bool m_muted = false;
-
-  // Clocking variables and functions
-  DWORD MetGetTime(void);
-  REFERENCE_TIME m_rtPrivateTime;
-  DWORD m_dwPrevSystemTime;
-
-  DWORD m_msPerTick;
-  DWORD m_LastTickTime;
-  DWORD m_LastTickTGT;
-
-  DWORD m_SamplesSinceTick;
-  DWORD m_SamplesSinceSpike;
-  BOOL m_fSpikeAtStart;
-  DWORD m_dwLastMet;
-  DWORD m_dwLastTGT;
-
-  CCritSec m_csClock;
-
-  IReferenceClock* m_pCurrentRefClock;
-  IReferenceClock* m_pPrevRefClock;
 };

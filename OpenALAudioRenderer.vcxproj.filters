@@ -162,6 +162,21 @@
     <ClInclude Include="OpenALAudioRenderer.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="OpenALAudioManager.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="CAudioInputPin.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="CMixer.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="COpenALFilter.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="BaseHeader.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="amextra.cpp">
@@ -261,6 +276,18 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="OpenALAudioRenderer.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="OpenALAudioManager.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="COpenALFilter.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="CAudioInputPin.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="CMixer.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>

@@ -162,9 +162,13 @@
   <ItemGroup>
     <ClInclude Include="amextra.h" />
     <ClInclude Include="amfilter.h" />
+    <ClInclude Include="BaseHeader.h" />
     <ClInclude Include="cache.h" />
+    <ClInclude Include="CAudioInputPin.h" />
     <ClInclude Include="checkbmi.h" />
+    <ClInclude Include="CMixer.h" />
     <ClInclude Include="combase.h" />
+    <ClInclude Include="COpenALFilter.h" />
     <ClInclude Include="cprop.h" />
     <ClInclude Include="ctlutil.h" />
     <ClInclude Include="ddmm.h" />
@@ -180,6 +184,7 @@
     <ClInclude Include="measure.h" />
     <ClInclude Include="msgthrd.h" />
     <ClInclude Include="mtype.h" />
+    <ClInclude Include="OpenALAudioManager.h" />
     <ClInclude Include="OpenALStream.h" />
     <ClInclude Include="outputq.h" />
     <ClInclude Include="perflog.h" />
@@ -212,13 +217,17 @@
     <ClCompile Include="amfilter.cpp" />
     <ClCompile Include="amvideo.cpp" />
     <ClCompile Include="arithutil.cpp" />
+    <ClCompile Include="CAudioInputPin.cpp" />
+    <ClCompile Include="CMixer.cpp" />
     <ClCompile Include="combase.cpp" />
+    <ClCompile Include="COpenALFilter.cpp" />
     <ClCompile Include="cprop.cpp" />
     <ClCompile Include="ctlutil.cpp" />
     <ClCompile Include="ddmm.cpp" />
     <ClCompile Include="dllentry.cpp" />
     <ClCompile Include="dllsetup.cpp" />
     <ClCompile Include="mtype.cpp" />
+    <ClCompile Include="OpenALAudioManager.cpp" />
     <ClCompile Include="OpenALStream.cpp" />
     <ClCompile Include="outputq.cpp" />
     <ClCompile Include="perflog.cpp" />

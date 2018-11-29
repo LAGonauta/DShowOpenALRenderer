@@ -4,13 +4,7 @@
 
 #ifdef _WIN32
 
-#include <windows.h>
-#include <sstream>
-#include <thread>
-#include <vector>
-
-#include "OpenALStream.h"
-#include "OpenALAudioRenderer.h"
+#include "BaseHeader.h"
 
 static HMODULE s_openal_dll = nullptr;
 
@@ -108,183 +102,14 @@ COpenALStream::~COpenALStream(void)
 }
 
 COpenALStream::COpenALStream(CMixer* audioMixer, LPUNKNOWN pUnk, HRESULT * phr)
-  : CBaseReferenceClock(NAME("OpenAL Stream Clock"), pUnk, phr),
-  CBasicAudio(L"OpenAL Volume Setting", pUnk),
-  m_pCurrentRefClock(0), m_pPrevRefClock(0)
+  : CBasicAudio(L"OpenAL Volume Setting", pUnk)
 {
   EXECUTE_ASSERT(SUCCEEDED(isValid()));
 
   EXECUTE_ASSERT(SUCCEEDED(OpenDevice()));
 
   m_mixer = audioMixer;
-
-  // last time we reported
-  m_dwLastMet = 0;
-
-  // similar to m_LastMet, but used to help switch between clocks somehow
-  m_dwPrevSystemTime = timeGetTime();
-
-  // what timeGetTime said last time we heard a tick
-  m_LastTickTGT = m_dwPrevSystemTime;
-
-  // the number we reported last time we heard a tick
-  m_LastTickTime = m_LastTickTGT;
-
-  // the last time we reported (in 100ns units)
-  m_rtPrivateTime = (UNITS / MILLISECONDS) * m_dwPrevSystemTime;
-
-  // what timeGetTime said the last time we were asked what time it was
-  m_dwLastTGT = m_dwPrevSystemTime;
-
-  // We start off assuming the clock is running at normal speed
-  m_msPerTick = m_latency / num_buffers;
-
-  DbgLog((LOG_TRACE, 1, TEXT("Creating clock at ref tgt=%d"), m_LastTickTime));
 }
-
-//REFERENCE_TIME COpenALStream::GetPrivateTime()
-//{
-//  CAutoLock cObjectLock(this);
-//
-//  /* If the clock has wrapped then the current time will be less than
-//  * the last time we were notified so add on the extra milliseconds
-//  *
-//  * The time period is long enough so that the likelihood of
-//  * successive calls spanning the clock cycle is not considered.
-//  */
-//
-//  // This returns the current time in ms according to our special clock.  If
-//  // we used timeGetTime() here, our clock would run normally.
-//  //DWORD dwTime = MetGetTime();
-//  DWORD dwTime = timeGetTime();
-//  {
-//    REFERENCE_TIME delta = REFERENCE_TIME(dwTime) - REFERENCE_TIME(m_dwPrevSystemTime);
-//    if (dwTime < m_dwPrevSystemTime)
-//      delta += REFERENCE_TIME(UINT_MAX) + 1;
-//
-//    m_dwPrevSystemTime = dwTime;
-//
-//    delta *= (UNITS / MILLISECONDS);
-//    m_rtPrivateTime += delta;
-//  }
-//
-//  return m_rtPrivateTime;
-//}
-
-void COpenALStream::SetSyncSource(IReferenceClock * pClock)
-{
-  m_pPrevRefClock = m_pCurrentRefClock;
-
-  if (pClock)
-  {
-    m_dwPrevSystemTime = timeGetTime();
-
-    if (IsEqualObject(pClock, pUnk()))
-    {
-      // Sync this clock up to the old one - just to be nice - for now
-      m_LastTickTGT = m_dwPrevSystemTime;
-      m_LastTickTime = m_LastTickTGT;
-      m_rtPrivateTime = (UNITS / MILLISECONDS) * m_dwPrevSystemTime;
-
-      if (m_pPrevRefClock)
-      {
-        if (SUCCEEDED(m_pPrevRefClock->GetTime(&m_rtPrivateTime)))
-        {
-          m_dwPrevSystemTime += timeGetTime();
-          m_dwPrevSystemTime /= 2;
-        }
-        else
-          ASSERT(FALSE);
-      }
-
-      DbgLog((LOG_TRACE, 1, TEXT("*** USING OUR CLOCK : reference is %d at tgt %d"),
-        (DWORD)(MILLISECONDS * m_rtPrivateTime / UNITS), m_LastTickTime));
-    }
-    else
-    {
-      // Sync our clock up to the new one
-      m_LastTickTGT = m_dwPrevSystemTime;
-      m_LastTickTime = m_LastTickTGT;
-      EXECUTE_ASSERT(SUCCEEDED(pClock->GetTime(&m_rtPrivateTime)));
-
-      m_dwPrevSystemTime += timeGetTime();
-      m_dwPrevSystemTime /= 2;
-
-      DbgLog((LOG_TRACE, 1, TEXT("*** USING SOMEONE ELSE'S CLOCK : reference is %d at tgt %d"),
-        (DWORD)(MILLISECONDS * m_rtPrivateTime / UNITS), m_LastTickTime));
-    }
-  }
-
-  m_pCurrentRefClock = pClock;
-}
-
-void COpenALStream::ClockController(HDRVR hdrvr, DWORD_PTR dwUser, DWORD_PTR dw2)
-{
-  COpenALStream* pFilter = (COpenALStream *)dwUser;
-
-  // really need a second worker thread here, because
-  // one shouldn't do this much in a wave callback.
-
-  ASSERT(pFilter);
-
-  int spike = 0;
-
-  // look for a spike in this buffer we just recorded
-
-    // don't let anybody else mess with our timing variables
-  pFilter->m_csClock.Lock();
-
-  // How long has it been since we saw a tick?
-  pFilter->m_SamplesSinceTick += spike;
-  DWORD msPerTickPrev = pFilter->m_msPerTick;
-
-  // Even though we just got the callback now, this stuff was
-  // recorded who knows how long ago, so what we're doing is not
-  // entirely correct... we're assuming that since we just noticed
-  // the tick means that it happened right now.  As long as our
-  // buffers are really small, and the system is very responsive,
-  // this won't be too bad.
-  DWORD dwTGT = timeGetTime();
-
-  // deal with clock stopping altogether for a while - pretend
-  // it kept ticking at its old rate or else we will think we're
-  // way ahead and the clock will freeze for the length of time
-  // the clock was stopped
-  // So if it's been a while since the last tick, don't use that
-  // long interval as a new tempo.  This way you can stop clapping
-  // and the movie will keep the current tempo until you start
-  // clapping a new tempo.
-  // (If it's been > 1.5s since the last tick, this is probably
-  //  the start of a new tempo).
-  if (pFilter->m_SamplesSinceTick * 1000 / 11025 > 1500)
-  {
-    DbgLog((LOG_TRACE, 2, TEXT("Ignoring 1st TICK after long gap")));
-  }
-  else
-  {
-    // running our clock at the old rate, we'd be here right now
-    pFilter->m_LastTickTime = pFilter->m_dwLastMet +
-      (dwTGT - pFilter->m_dwLastTGT) *
-      625 / pFilter->m_msPerTick;
-
-    pFilter->m_msPerTick = (DWORD)((LONGLONG)
-      pFilter->m_SamplesSinceTick * 1000 / 11025);
-
-    pFilter->m_LastTickTGT = dwTGT;
-
-    DbgLog((LOG_TRACE, 2, TEXT("TICK! after %dms, reporting %d tgt=%d"), pFilter->m_msPerTick, pFilter->m_LastTickTime, pFilter->m_LastTickTGT));
-  }
-
-  pFilter->m_SamplesSinceTick = 0;
-  pFilter->m_csClock.Unlock();
-
-  // we went the whole buffer without seeing a tick.
-  //pFilter->m_SamplesSinceTick += len;
-}
-
-//
-// AyuanX: Spec says OpenAL1.1 is thread safe already
-//
 
 std::vector<std::string> GetAllDevices()
 {
@@ -518,43 +343,6 @@ HRESULT COpenALStream::setBitness(MediaBitness bitness)
 COpenALStream::MediaBitness COpenALStream::getBitness()
 {
   return m_bitness;
-}
-
-DWORD COpenALStream::MetGetTime(void)
-{
-  // Don't let anybody change our time variables on us while we're using them
-  m_csClock.Lock();
-  LONGLONG lfudge;
-
-  // how many ms have elapsed since last time we were asked?
-  DWORD tgt = timeGetTime();
-  LONGLONG lms = tgt - m_LastTickTGT;
-
-  // How many ms do we want to pretend elapsed?
-  if (m_msPerTick)
-    lfudge = lms * (625) / (LONGLONG)m_msPerTick;
-  else
-    lfudge = 0; // !!!
-
-                // that's the new time to report
-  DWORD dw = m_LastTickTime + (DWORD)lfudge;
-  m_csClock.Unlock();
-
-  // Under no circumstances do we let the clock run backwards.  Just stall it.
-  if (dw < m_dwLastMet)
-  {
-    dw = m_dwLastMet;
-    DbgLog((LOG_TRACE, 1, TEXT("*** ACK! Tried to go backwards!")));
-  }
-
-  DbgLog((LOG_TRACE, 3, TEXT("MetTGT: %dms elapsed. Adjusted to %dms"),
-    (int)lms, (int)lfudge));
-  DbgLog((LOG_TRACE, 3, TEXT("        returning %d TGT=%d"), (int)dw,
-    (int)timeGetTime()));
-
-  m_dwLastMet = dw;
-  m_dwLastTGT = tgt;
-  return dw;
 }
 
 void COpenALStream::SetVolume(int volume)
@@ -795,6 +583,7 @@ void COpenALStream::SoundLoop()
   std::vector<int8_t> byte_data;
   while (m_run_thread)
   {
+    getSampleTime();
     if (m_mixer->IsStreaming())
     {
       // Check if stream changed frequency, bitness or channel setup
@@ -844,9 +633,6 @@ void COpenALStream::SoundLoop()
 
         num_buffers_queued -= num_buffers_processed;
       }
-
-      // Control clock
-      //ClockController();
 
       size_t available_frames = 0;
       switch (m_bitness)
