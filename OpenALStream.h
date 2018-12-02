@@ -9,8 +9,12 @@
 
 // OpenAL requires a minimum of two buffers, three or more recommended
 constexpr size_t OAL_BUFFERS = 8;
+
+class COpenALFilter;
+
 class COpenALStream : public CBasicAudio, public CBaseReferenceClock
 {
+  friend class COpenALFilter;
 public:
   enum SpeakerLayout
   {
@@ -31,7 +35,7 @@ public:
   };
 
   ~COpenALStream();
-  COpenALStream(CMixer* audioMixer, LPUNKNOWN pUnk, HRESULT* phr, CRefTime* filter_start_time);
+  COpenALStream(CMixer* audioMixer, LPUNKNOWN pUnk, HRESULT* phr, COpenALFilter* base_filter);
 
   // We must make this time depend on the sound card buffers latter,
   // not on the system clock
@@ -95,7 +99,7 @@ private:
   uint32_t m_latency = 128;
   bool m_muted = false;
 
-  // Time
-  CRefTime* m_start_time;
-  CRefTime m_current_start_time;
+  // For CBaseClock
+  COpenALFilter* m_base_filter;
+  REFERENCE_TIME m_start_time;
 };

@@ -31,7 +31,7 @@ COpenALFilter::COpenALFilter(LPUNKNOWN pUnk, HRESULT *phr) :
       *phr = E_OUTOFMEMORY;
   }
 
-  m_openal_device = new COpenALStream(m_mixer, static_cast<IBaseFilter*>(this), phr, &m_tStart);
+  m_openal_device = new COpenALStream(m_mixer, static_cast<IBaseFilter*>(this), phr, this);
 } // (Constructor)
 
   //

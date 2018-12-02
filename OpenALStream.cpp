@@ -101,12 +101,11 @@ COpenALStream::~COpenALStream(void)
   }
 }
 
-COpenALStream::COpenALStream(CMixer* audioMixer, LPUNKNOWN pUnk, HRESULT* phr, CRefTime* filter_start_time)
+COpenALStream::COpenALStream(CMixer* audioMixer, LPUNKNOWN pUnk, HRESULT* phr, COpenALFilter* base_filter)
   : CBasicAudio(NAME("OpenAL Volume Setting"), pUnk),
   CBaseReferenceClock(NAME("OpenAL Stream Clock"), pUnk, phr),
   m_mixer(audioMixer),
-  m_start_time(filter_start_time),
-  m_current_start_time(*filter_start_time)
+  m_base_filter(base_filter)
 {
   EXECUTE_ASSERT(SUCCEEDED(isValid()));
 
@@ -134,7 +133,16 @@ REFERENCE_TIME COpenALStream::GetPrivateTime()
 {
   CAutoLock cObjectLock(this);
 
-  return m_current_start_time.GetUnits() + getSampleTime();
+  REFERENCE_TIME clock = MILLISECONDS_TO_100NS_UNITS(timeGetTime());
+  if (m_base_filter->m_State == State_Running)
+  {
+    REFERENCE_TIME sampleTime = getSampleTime();
+    REFERENCE_TIME startTime = m_base_filter->m_tStart;
+    if (sampleTime > 0)
+      clock = sampleTime + startTime;
+  }
+
+  return clock;
 }
 
 STDMETHODIMP COpenALStream::OpenDevice(void)
@@ -419,7 +427,7 @@ REFERENCE_TIME COpenALStream::getSampleTime()
   }
 
   std::ostringstream string;
-  string << "Current start time: " << m_current_start_time.GetUnits() << ". Buffered time in units of 100ns: " << static_cast<REFERENCE_TIME>(total_played_ms * UNITS / MILLISECONDS) << "." << std::endl;
+  string << "Current start time: " << m_base_filter->m_tStart.GetUnits() << ". Buffered time in units of 100ns: " << static_cast<REFERENCE_TIME>(total_played_ms * UNITS / MILLISECONDS) << "." << std::endl;
   OutputDebugStringA(string.str().c_str());
 
   return static_cast<REFERENCE_TIME>(total_played_ms * UNITS / MILLISECONDS);
@@ -585,14 +593,14 @@ void COpenALStream::SoundLoop()
   {
     if (m_mixer->IsStreaming())
     {
-      if (m_current_start_time != *m_start_time)
+      if (m_start_time != m_base_filter->m_tStart)
       {
         m_total_played = 0;
-        m_current_start_time = *m_start_time;
+        m_start_time = m_base_filter->m_tStart;
       }
 
       // Check if stream changed frequency, bitness or channel setup
-      if (past_frequency != m_frequency || past_bitness != m_bitness || past_speaker_layout != m_speaker_layout)
+      if (past_frequency != m_frequency || past_bitness != m_bitness || past_speaker_layout != m_speaker_layout || m_start_time != m_base_filter->m_tStart)
       {
         // Stop source and clean-up buffers
         palSourceStop(m_source);
