@@ -9,7 +9,7 @@
 
 // OpenAL requires a minimum of two buffers, three or more recommended
 constexpr size_t OAL_BUFFERS = 8;
-class COpenALStream : public CBasicAudio
+class COpenALStream : public CBasicAudio, public CBaseReferenceClock
 {
 public:
   enum SpeakerLayout
@@ -31,11 +31,17 @@ public:
   };
 
   ~COpenALStream();
-  COpenALStream(CMixer* audioMixer, LPUNKNOWN pUnk, HRESULT *phr);
+  COpenALStream(CMixer* audioMixer, LPUNKNOWN pUnk, HRESULT* phr, CRefTime* filter_start_time);
 
   // We must make this time depend on the sound card buffers latter,
   // not on the system clock
-  //REFERENCE_TIME GetPrivateTime() override;
+  REFERENCE_TIME GetPrivateTime() override;
+  //void SetSyncSource(IReferenceClock *pClock);
+
+  IUnknown * pUnk()
+  {
+    return static_cast<IUnknown*>(static_cast<IReferenceClock*>(this));
+  }
 
   STDMETHODIMP OpenDevice();
   STDMETHODIMP CloseDevice();
@@ -59,7 +65,6 @@ public:
   std::vector<SpeakerLayout> getSupportedSpeakerLayout();
   // In milliseconds
   REFERENCE_TIME getSampleTime();
-  HRESULT resetSampleTime();
 
 private:
   STDMETHODIMP isValid();
@@ -76,7 +81,8 @@ private:
   uint32_t num_buffers_queued = 0;
 
   std::vector<ALuint> m_buffers;
-  std::atomic<size_t> m_total_buffered = 0;
+  std::queue<size_t> m_buffer_size;
+  std::atomic<size_t> m_total_played = 0;
   ALuint m_source = 0;
   std::atomic<ALfloat> m_volume = 1.0f;
 
@@ -86,6 +92,10 @@ private:
   std::atomic<ALsizei> m_frequency = 48000;
 
   // Get from settings
-  uint32_t m_latency = 64;
+  uint32_t m_latency = 128;
   bool m_muted = false;
+
+  // Time
+  CRefTime* m_start_time;
+  CRefTime m_current_start_time;
 };

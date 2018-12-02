@@ -101,14 +101,16 @@ COpenALStream::~COpenALStream(void)
   }
 }
 
-COpenALStream::COpenALStream(CMixer* audioMixer, LPUNKNOWN pUnk, HRESULT * phr)
-  : CBasicAudio(L"OpenAL Volume Setting", pUnk)
+COpenALStream::COpenALStream(CMixer* audioMixer, LPUNKNOWN pUnk, HRESULT* phr, CRefTime* filter_start_time)
+  : CBasicAudio(NAME("OpenAL Volume Setting"), pUnk),
+  CBaseReferenceClock(NAME("OpenAL Stream Clock"), pUnk, phr),
+  m_mixer(audioMixer),
+  m_start_time(filter_start_time),
+  m_current_start_time(*filter_start_time)
 {
   EXECUTE_ASSERT(SUCCEEDED(isValid()));
 
   EXECUTE_ASSERT(SUCCEEDED(OpenDevice()));
-
-  m_mixer = audioMixer;
 }
 
 std::vector<std::string> GetAllDevices()
@@ -126,6 +128,13 @@ std::vector<std::string> GetAllDevices()
   }
 
   return devices_names_list;
+}
+
+REFERENCE_TIME COpenALStream::GetPrivateTime()
+{
+  CAutoLock cObjectLock(this);
+
+  return m_current_start_time.GetUnits() + getSampleTime();
 }
 
 STDMETHODIMP COpenALStream::OpenDevice(void)
@@ -306,7 +315,7 @@ HRESULT COpenALStream::Stop()
 {
   palSourceStop(m_source);
   palSourcei(m_source, AL_BUFFER, 0);
-  m_total_buffered = 0;
+  m_total_played = 0;
   OutputDebugStringA("Stopped, cleared buffers.\n");
 
   return S_OK;
@@ -399,30 +408,21 @@ std::vector<COpenALStream::SpeakerLayout> COpenALStream::getSupportedSpeakerLayo
 
 REFERENCE_TIME COpenALStream::getSampleTime()
 {
-  size_t total_played = m_total_buffered * 1000;
-  total_played /= m_frequency;
+  double total_played_ms = m_total_played * 1000 / m_frequency;
 
-  // Subtract played
+  // Add played
   float offset = 0;
   if (m_source)
   {
     palGetSourcef(m_source, AL_SEC_OFFSET, &offset);
-    offset *= 1000;
-    if (offset < total_played)
-      total_played -= static_cast<size_t>(offset);
+    total_played_ms += offset * 1000;
   }
 
   std::ostringstream string;
-  string << "Buffered time in milliseconds: " << total_played << "." << std::endl;
+  string << "Current start time: " << m_current_start_time.GetUnits() << ". Buffered time in units of 100ns: " << static_cast<REFERENCE_TIME>(total_played_ms * UNITS / MILLISECONDS) << "." << std::endl;
   OutputDebugStringA(string.str().c_str());
 
-  return total_played;
-}
-
-HRESULT COpenALStream::resetSampleTime()
-{
-  m_total_buffered = 0;
-  return S_OK;
+  return static_cast<REFERENCE_TIME>(total_played_ms * UNITS / MILLISECONDS);
 }
 
 std::string GenerateFormatString(COpenALStream::SpeakerLayout speaker_layout, COpenALStream::MediaBitness bitness)
@@ -583,9 +583,14 @@ void COpenALStream::SoundLoop()
   std::vector<int8_t> byte_data;
   while (m_run_thread)
   {
-    getSampleTime();
     if (m_mixer->IsStreaming())
     {
+      if (m_current_start_time != *m_start_time)
+      {
+        m_total_played = 0;
+        m_current_start_time = *m_start_time;
+      }
+
       // Check if stream changed frequency, bitness or channel setup
       if (past_frequency != m_frequency || past_bitness != m_bitness || past_speaker_layout != m_speaker_layout)
       {
@@ -632,24 +637,29 @@ void COpenALStream::SoundLoop()
         err = CheckALError("unqueuing buffers");
 
         num_buffers_queued -= num_buffers_processed;
+        for (int i = 0; i < num_buffers_processed; ++i)
+        {
+          m_total_played += m_buffer_size.front();
+          m_buffer_size.pop();
+        }
       }
 
       size_t available_frames = 0;
+      size_t byte_per_sample = 0;
       switch (m_bitness)
       {
       case bit8:
-        available_frames = m_mixer->Mix(&byte_data, frames_per_buffer, 1);
+        byte_per_sample = 1;
         break;
       case bit16:
-        available_frames = m_mixer->Mix(&byte_data, frames_per_buffer, 2);
-        break;
-      case bit32:
-        available_frames = m_mixer->Mix(&byte_data, frames_per_buffer, 4);
+        byte_per_sample = 2;
         break;
       case bitfloat:
-        available_frames = m_mixer->Mix(&byte_data, frames_per_buffer, 4);
+      case bit32:
+        byte_per_sample = 4;
         break;
       }
+      available_frames = m_mixer->Mix(&byte_data, frames_per_buffer, byte_per_sample);
 
       if (!available_frames)
       {
@@ -665,9 +675,8 @@ void COpenALStream::SoundLoop()
       err = CheckALError("buffering data");
 
       palSourceQueueBuffers(m_source, 1, &m_buffers[next_buffer]);
+      m_buffer_size.push(available_frames);
       err = CheckALError("queuing buffers");
-
-      m_total_buffered += available_frames;
 
       num_buffers_queued++;
       next_buffer = (next_buffer + 1) % num_buffers;

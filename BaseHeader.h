@@ -13,6 +13,7 @@
 #include <thread>
 #include <vector>
 #include <windows.h>
+#include <queue>
 
 #include "OpenALAudioRenderer.h"
 #include "OpenALAudioManager.h"

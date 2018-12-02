@@ -31,7 +31,7 @@ COpenALFilter::COpenALFilter(LPUNKNOWN pUnk, HRESULT *phr) :
       *phr = E_OUTOFMEMORY;
   }
 
-  m_openal_device = new COpenALStream(m_mixer, static_cast<IBaseFilter*>(this), phr);
+  m_openal_device = new COpenALStream(m_mixer, static_cast<IBaseFilter*>(this), phr, &m_tStart);
 } // (Constructor)
 
   //
@@ -48,6 +48,10 @@ COpenALFilter::~COpenALFilter()
   ASSERT(m_openal_device);
   delete m_openal_device;
   m_openal_device = nullptr;
+
+  ASSERT(m_mixer);
+  delete m_mixer;
+  m_mixer = nullptr;
 } // (Destructor)
 
   //
@@ -95,11 +99,6 @@ STDMETHODIMP COpenALFilter::JoinFilterGraph(IFilterGraph *pGraph, LPCWSTR pName)
   return hr;
 } // JoinFilterGraph
 
-//REFERENCE_TIME COpenALFilter::GetPrivateTime()
-//{
-//  return REFERENCE_TIME();
-//}
-
 HRESULT COpenALFilter::NonDelegatingQueryInterface(REFIID riid, void ** ppv)
 {
   CheckPointer(ppv, E_POINTER);
@@ -109,10 +108,10 @@ HRESULT COpenALFilter::NonDelegatingQueryInterface(REFIID riid, void ** ppv)
     return CUnknown::NonDelegatingQueryInterface(riid, ppv);
   }
 
-  //if (riid == IID_IReferenceClock || riid == IID_IReferenceClockTimerControl)
-  //{
-  //  return GetInterface(static_cast<IReferenceClock*>(this), ppv);
-  //}
+  if (riid == IID_IReferenceClock || riid == IID_IReferenceClockTimerControl)
+  {
+    return GetInterface(static_cast<IReferenceClock*>(m_openal_device), ppv);
+  }
 
   if (riid == IID_IBasicAudio)
   {
@@ -188,7 +187,6 @@ STDMETHODIMP COpenALFilter::Pause()
   if (m_State == State_Running)
   {
     m_mixer->StopStreaming();
-    m_openal_device->resetSampleTime();
   }
 
   // tell the pin to go inactive and change state
