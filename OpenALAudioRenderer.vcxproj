@@ -166,7 +166,6 @@
     <ClInclude Include="cache.h" />
     <ClInclude Include="CAudioInputPin.h" />
     <ClInclude Include="checkbmi.h" />
-    <ClInclude Include="CMixer.h" />
     <ClInclude Include="combase.h" />
     <ClInclude Include="COpenALFilter.h" />
     <ClInclude Include="cprop.h" />
@@ -218,7 +217,6 @@
     <ClCompile Include="amvideo.cpp" />
     <ClCompile Include="arithutil.cpp" />
     <ClCompile Include="CAudioInputPin.cpp" />
-    <ClCompile Include="CMixer.cpp" />
     <ClCompile Include="combase.cpp" />
     <ClCompile Include="COpenALFilter.cpp" />
     <ClCompile Include="cprop.cpp" />

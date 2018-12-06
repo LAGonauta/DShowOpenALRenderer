@@ -5,7 +5,6 @@ class CAudioInputPin : public CCritSec, public CBaseInputPin
   friend class COpenALFilter;
   friend class CMixer;
 private:
-  HRESULT CheckOpenALMediaType(const WAVEFORMATEX* wave_format);
   COpenALFilter *m_pFilter;         // The filter that owns us
   CCritSec m_receiveMutex;
 

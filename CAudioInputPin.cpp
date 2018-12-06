@@ -4,9 +4,7 @@
 //
 // Constructor
 //
-CAudioInputPin::CAudioInputPin(COpenALFilter *pFilter,
-  HRESULT *phr,
-  LPCWSTR pPinName) :
+CAudioInputPin::CAudioInputPin(COpenALFilter *pFilter, HRESULT *phr, LPCWSTR pPinName) :
   CBaseInputPin(NAME("Audio Input Pin"), pFilter, pFilter, phr, pPinName)
 {
   m_pFilter = pFilter;
@@ -48,114 +46,6 @@ HRESULT CAudioInputPin::BreakConnect()
   return CBaseInputPin::BreakConnect();
 } // BreakConnect
 
-HRESULT CAudioInputPin::CheckOpenALMediaType(const WAVEFORMATEX* wave_format)
-{
-  // Set frequency
-  m_pFilter->m_openal_device->setFrequency(wave_format->nSamplesPerSec);
-
-  // Get supported layout
-  auto supported_bitness = m_pFilter->m_openal_device->getSupportedBitness();
-
-  // Get supported bitness
-  auto supported_layouts = m_pFilter->m_openal_device->getSupportedSpeakerLayout();
-  bool valid_channel_layout = false;
-  bool valid_sample_type = false;
-
-  // Normalize channels
-  COpenALStream::SpeakerLayout speaker_layout;
-  switch (wave_format->nChannels)
-  {
-  case 1:
-    speaker_layout = COpenALStream::SpeakerLayout::Mono;
-    break;
-  case 2:
-    speaker_layout = COpenALStream::SpeakerLayout::Stereo;
-    break;
-  case 4:
-    speaker_layout = COpenALStream::SpeakerLayout::Quad;
-    break;
-  case 6:
-    speaker_layout = COpenALStream::SpeakerLayout::Surround6;
-    break;
-  case 8:
-    speaker_layout = COpenALStream::SpeakerLayout::Surround8;
-    break;
-  }
-
-  if (std::any_of(supported_layouts.cbegin(), supported_layouts.cend(),
-    [speaker_layout](COpenALStream::SpeakerLayout layout) { return layout == speaker_layout; }))
-  {
-    m_pFilter->m_openal_device->setSpeakerLayout(speaker_layout);
-    valid_channel_layout = true;
-  }
-  else
-  {
-    return S_FALSE;
-  }
-
-  // Normalize bitness
-  COpenALStream::MediaBitness media_bitness;
-  if (wave_format->wFormatTag == WAVE_FORMAT_EXTENSIBLE)
-  {
-    auto format = reinterpret_cast<const WAVEFORMATEXTENSIBLE*>(wave_format);
-    if (format->SubFormat == KSDATAFORMAT_SUBTYPE_IEEE_FLOAT)
-    {
-      media_bitness = COpenALStream::MediaBitness::bitfloat;
-    }
-    else if (format->SubFormat == KSDATAFORMAT_SUBTYPE_PCM)
-    {
-      switch (format->Format.wBitsPerSample)
-      {
-      case 8:
-        media_bitness = COpenALStream::MediaBitness::bit8;
-        break;
-      case 16:
-        media_bitness = COpenALStream::MediaBitness::bit16;
-        break;
-      case 24:
-        media_bitness = COpenALStream::MediaBitness::bit24;
-        break;
-      case 32:
-        media_bitness = COpenALStream::MediaBitness::bit32;
-        break;
-      }
-    }
-  }
-  else if (wave_format->wFormatTag == WAVE_FORMAT_PCM)
-  {
-    auto format = reinterpret_cast<const PCMWAVEFORMAT*>(wave_format);
-    switch (format->wBitsPerSample)
-    {
-    case 8:
-      media_bitness = COpenALStream::MediaBitness::bit8;
-      break;
-    case 16:
-      media_bitness = COpenALStream::MediaBitness::bit16;
-      break;
-    case 24:
-      media_bitness = COpenALStream::MediaBitness::bit24;
-      break;
-    case 32:
-      media_bitness = COpenALStream::MediaBitness::bit32;
-      break;
-    }
-  }
-
-  if (std::any_of(supported_bitness.cbegin(), supported_bitness.cend(),
-    [media_bitness](COpenALStream::MediaBitness bitness) { return bitness == media_bitness; }))
-  {
-    m_pFilter->m_openal_device->setBitness(media_bitness);
-    valid_sample_type = true;
-  }
-
-  if (valid_channel_layout && valid_sample_type)
-  {
-    return S_OK;
-  }
-
-  return S_FALSE;
-}
-
 //
 // CheckMediaType
 //
@@ -188,21 +78,8 @@ HRESULT CAudioInputPin::CheckMediaType(const CMediaType *pmt)
     return S_FALSE;
   }
 
-  m_pFilter->m_mixer->m_is_float = (pwfx->wFormatTag == WAVE_FORMAT_IEEE_FLOAT);
-  if (m_pFilter->m_mixer->m_is_float == false)
-  {
-    if (pwfx->wFormatTag == WAVE_FORMAT_EXTENSIBLE)
-    {
-      auto format = reinterpret_cast<const WAVEFORMATEXTENSIBLE*>(pwfx);
-      if (format->SubFormat == KSDATAFORMAT_SUBTYPE_IEEE_FLOAT)
-      {
-        m_pFilter->m_mixer->m_is_float = true;
-      }
-    }
-  }
-
   // Check if our OpenAL driver supports it
-  auto hr = CheckOpenALMediaType(pwfx);
+  auto hr = m_pFilter->m_openal_device->checkMediaType(pwfx);
   if (SUCCEEDED(hr))
   {
     return hr;
@@ -222,22 +99,22 @@ HRESULT CAudioInputPin::SetMediaType(const CMediaType *pmt)
   CAutoLock lock(m_pFilter);
 
   // Pass the call up to my base class
-
-  HRESULT hr = CBaseInputPin::SetMediaType(pmt);
+  auto pwfx = reinterpret_cast<const WAVEFORMATEX*>(pmt->Format());
+  if (pwfx == nullptr)
+  {
+    return S_FALSE;
+  }
+  auto hr = m_pFilter->m_openal_device->checkMediaType(pwfx);
   if (SUCCEEDED(hr))
   {
-    auto pwf = reinterpret_cast<const WAVEFORMATEX*>(pmt->Format());
-
-    m_pFilter->m_mixer->m_nChannels = pwf->nChannels;
-    m_pFilter->m_mixer->m_nSamplesPerSec = pwf->nSamplesPerSec;
-    m_pFilter->m_mixer->m_nBitsPerSample = pwf->wBitsPerSample;
-    m_pFilter->m_mixer->m_nBlockAlign = pwf->nBlockAlign;
-    m_pFilter->m_mixer->m_is_float = (pwf->wFormatTag == WAVE_FORMAT_IEEE_FLOAT);
-
-    auto hrr = CheckOpenALMediaType(pwf);
-    if (SUCCEEDED(hrr))
+    hr = m_pFilter->m_openal_device->setMediaType(pmt);
+    if (SUCCEEDED(hr))
     {
-      return hrr;
+      hr = CBaseInputPin::SetMediaType(pmt);
+      if (SUCCEEDED(hr))
+      {
+        return hr;
+      }
     }
   }
 
@@ -300,9 +177,6 @@ HRESULT CAudioInputPin::Receive(IMediaSample * pSample)
       {
         return hr;
       }
-
-      // Clear queues
-      m_pFilter->m_mixer->m_sample_queue.clear();
     }
 
     //if (m_eosUp)
@@ -310,7 +184,7 @@ HRESULT CAudioInputPin::Receive(IMediaSample * pSample)
   }
 
   // Send the sample to the video window object for rendering
-  return m_pFilter->m_mixer->Receive(pSample);
+  return m_pFilter->m_openal_device->Receive(pSample);
 } // Receive
 
 STDMETHODIMP CAudioInputPin::EndOfStream()
@@ -330,7 +204,7 @@ STDMETHODIMP CAudioInputPin::BeginFlush()
   // Subsequent ones will be rejected because m_bFlushing == TRUE.
   CAutoLock receiveLock(&m_receiveMutex);
 
-  m_pFilter->m_mixer->m_sample_queue.clear();
+  m_pFilter->m_openal_device->ResetBuffer();
 
   return S_OK;
 }

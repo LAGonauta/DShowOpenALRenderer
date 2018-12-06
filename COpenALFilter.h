@@ -39,7 +39,6 @@ public:
   STDMETHODIMP JoinFilterGraph(IFilterGraph * pGraph, LPCWSTR pName);
 
 private:
-  CAudioInputPin *m_pInputPin;   // Handles pin interfaces
-  CMixer *m_mixer;
-  IUnknownPtr m_seeking;
+  CAudioInputPin *m_pInputPin = nullptr;   // Handles pin interfaces
+  IUnknownPtr m_seeking = nullptr;
 }; // COpenALFilter

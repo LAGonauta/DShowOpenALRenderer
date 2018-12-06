@@ -76,14 +76,3 @@ BOOL APIENTRY DllMain(HANDLE hModule,
 {
   return DllEntryPoint((HINSTANCE)(hModule), dwReason, lpReserved);
 }
-
-void DebugPrintf(const wchar_t *str, ...)
-{
-  wchar_t buf[2048];
-
-  va_list ptr;
-  va_start(ptr, str);
-  vswprintf_s(buf, 2048, str, ptr);
-
-  OutputDebugString(buf);
-}

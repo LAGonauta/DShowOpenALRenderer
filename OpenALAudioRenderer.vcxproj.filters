@@ -168,9 +168,6 @@
     <ClInclude Include="CAudioInputPin.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="CMixer.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="COpenALFilter.h">
       <Filter>Header Files</Filter>
     </ClInclude>
@@ -285,9 +282,6 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="CAudioInputPin.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="CMixer.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>

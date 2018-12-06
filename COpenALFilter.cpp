@@ -18,8 +18,7 @@ CUnknown * WINAPI COpenALFilter::CreateInstance(LPUNKNOWN pUnk, HRESULT *phr)
 #pragma warning(disable:4355 4127)
 
 COpenALFilter::COpenALFilter(LPUNKNOWN pUnk, HRESULT *phr) :
-  CBaseFilter(NAME("OpenAL Renderer"), pUnk, (CCritSec *)this, CLSID_OALRend),
-  m_mixer(new CMixer(NAME("OpenAL Renderer Mixer"), phr))
+  CBaseFilter(NAME("OpenAL Renderer"), pUnk, (CCritSec *)this, CLSID_OALRend)
 {
   ASSERT(phr);
 
@@ -31,7 +30,7 @@ COpenALFilter::COpenALFilter(LPUNKNOWN pUnk, HRESULT *phr) :
       *phr = E_OUTOFMEMORY;
   }
 
-  m_openal_device = new COpenALStream(m_mixer, static_cast<IBaseFilter*>(this), phr, this);
+  m_openal_device = new COpenALStream(static_cast<IBaseFilter*>(this), phr, this);
 } // (Constructor)
 
   //
@@ -48,10 +47,6 @@ COpenALFilter::~COpenALFilter()
   ASSERT(m_openal_device);
   delete m_openal_device;
   m_openal_device = nullptr;
-
-  ASSERT(m_mixer);
-  delete m_mixer;
-  m_mixer = nullptr;
 } // (Destructor)
 
   //
@@ -186,7 +181,7 @@ STDMETHODIMP COpenALFilter::Pause()
 
   if (m_State == State_Running)
   {
-    m_mixer->StopStreaming();
+    m_openal_device->StopStreaming();
   }
 
   // tell the pin to go inactive and change state
@@ -215,7 +210,7 @@ STDMETHODIMP COpenALFilter::Run(REFERENCE_TIME tStart)
 
   if (fsOld != State_Running)
   {
-    m_mixer->StartStreaming();
+    m_openal_device->StartStreaming();
     m_openal_device->StartDevice();
   }
 

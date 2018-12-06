@@ -20,4 +20,3 @@
 #include "CAudioInputPin.h"
 #include "COpenALFilter.h"
 #include "OpenALStream.h"
-#include "CMixer.h"

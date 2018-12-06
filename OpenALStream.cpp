@@ -4,7 +4,31 @@
 
 #ifdef _WIN32
 
+#include <numeric>
+
 #include "BaseHeader.h"
+
+void DebugPrintf(const wchar_t *str, ...)
+{
+  wchar_t buf[2048];
+
+  va_list ptr;
+  va_start(ptr, str);
+  vswprintf_s(buf, 2048, str, ptr);
+
+  OutputDebugString(buf);
+}
+
+void DebugPrintf(const char *str, ...)
+{
+  char buf[2048];
+
+  va_list ptr;
+  va_start(ptr, str);
+  vsprintf_s(buf, 2048, str, ptr);
+
+  OutputDebugStringA(buf);
+}
 
 static HMODULE s_openal_dll = nullptr;
 
@@ -93,18 +117,11 @@ STDMETHODIMP COpenALStream::isValid()
 COpenALStream::~COpenALStream(void)
 {
   CloseDevice();
-
-  // Finally Terminate thread
-  if (m_thread.joinable())
-  {
-    m_thread.join();
-  }
 }
 
-COpenALStream::COpenALStream(CMixer* audioMixer, LPUNKNOWN pUnk, HRESULT* phr, COpenALFilter* base_filter)
+COpenALStream::COpenALStream(LPUNKNOWN pUnk, HRESULT* phr, COpenALFilter* base_filter)
   : CBasicAudio(NAME("OpenAL Volume Setting"), pUnk),
   CBaseReferenceClock(NAME("OpenAL Stream Clock"), pUnk, phr),
-  m_mixer(audioMixer),
   m_base_filter(base_filter)
 {
   EXECUTE_ASSERT(SUCCEEDED(isValid()));
@@ -202,24 +219,34 @@ STDMETHODIMP COpenALStream::CloseDevice(void)
 
 STDMETHODIMP COpenALStream::StartDevice(void)
 {
-  if (m_run_thread == false)
-  {
-    // Terminate older thread, if it exists
-    if (m_thread.joinable())
-    {
-      m_thread.join();
-    }
+  past_frequency = m_frequency;
+  past_speaker_layout = m_speaker_layout;
+  past_bitness = m_bitness;
 
-    m_run_thread = true;
-    m_thread = std::thread(&COpenALStream::SoundLoop, this);
-  }
+  // Should we make these larger just in case the mixer ever sends more samples
+  // than what we request?
+  m_buffers.resize(num_buffers);
+  m_source = 0;
 
+  // Clear error state before querying or else we get false positives.
+  ALenum err = palGetError();
+
+  // Generate some AL Buffers for streaming
+  palGenBuffers(num_buffers, (ALuint*)m_buffers.data());
+  err = CheckALError("generating buffers");
+
+  // Generate a Source to playback the Buffers
+  palGenSources(1, &m_source);
+  err = CheckALError("generating sources");
+
+  // Set the default sound volume as saved in the config file.
+  palSourcef(m_source, AL_GAIN, m_volume);
   return S_OK;
 }
 
 STDMETHODIMP COpenALStream::StopDevice(void)
 {
-  m_run_thread = false;
+  Stop();
 
   return S_OK;
 }
@@ -329,32 +356,9 @@ HRESULT COpenALStream::Stop()
   return S_OK;
 }
 
-HRESULT COpenALStream::setSpeakerLayout(SpeakerLayout layout)
-{
-  m_speaker_layout = layout;
-  return S_OK;
-}
-
 COpenALStream::SpeakerLayout COpenALStream::getSpeakerLayout()
 {
   return m_speaker_layout;
-}
-
-HRESULT COpenALStream::setFrequency(uint32_t frequency)
-{
-  m_frequency = frequency;
-  return S_OK;
-}
-
-uint32_t COpenALStream::getFrequency()
-{
-  return m_frequency;
-}
-
-HRESULT COpenALStream::setBitness(MediaBitness bitness)
-{
-  m_bitness = bitness;
-  return S_OK;
 }
 
 COpenALStream::MediaBitness COpenALStream::getBitness()
@@ -414,9 +418,85 @@ std::vector<COpenALStream::SpeakerLayout> COpenALStream::getSupportedSpeakerLayo
   return supported_layouts;
 }
 
+COpenALStream::SpeakerLayout COpenALStream::ChannelsToSpeakerLayout(size_t num_channels)
+{
+  switch (num_channels)
+  {
+  case 1:
+    return SpeakerLayout::Mono;
+  case 2:
+    return SpeakerLayout::Stereo;
+  case 4:
+    return SpeakerLayout::Quad;
+  case 6:
+    return SpeakerLayout::Surround6;
+  case 8:
+    return SpeakerLayout::Surround8;
+  default:
+    throw std::invalid_argument("received invalid number of audio channels");
+  }
+}
+
+COpenALStream::MediaBitness COpenALStream::WaveformatToBitness(const WAVEFORMATEX * wave_format)
+{
+  if (wave_format->wFormatTag == WAVE_FORMAT_EXTENSIBLE)
+  {
+    auto format = reinterpret_cast<const WAVEFORMATEXTENSIBLE*>(wave_format);
+    if (format->SubFormat == KSDATAFORMAT_SUBTYPE_IEEE_FLOAT)
+    {
+      return MediaBitness::bitfloat;
+    }
+    else if (format->SubFormat == KSDATAFORMAT_SUBTYPE_PCM)
+    {
+      switch (format->Format.wBitsPerSample)
+      {
+      case 8:
+        return MediaBitness::bit8;
+      case 16:
+        return MediaBitness::bit16;
+      case 24:
+        return MediaBitness::bit24;
+      case 32:
+        return MediaBitness::bit32;
+      }
+    }
+  }
+  else if (wave_format->wFormatTag == WAVE_FORMAT_PCM)
+  {
+    auto format = reinterpret_cast<const PCMWAVEFORMAT*>(wave_format);
+    switch (format->wBitsPerSample)
+    {
+    case 8:
+      return MediaBitness::bit8;
+    case 16:
+      return MediaBitness::bit16;
+    case 24:
+      return MediaBitness::bit24;
+    case 32:
+      return MediaBitness::bit32;
+    }
+  }
+  throw std::invalid_argument("invalid media bitness");
+}
+
+HRESULT COpenALStream::ResetBuffer()
+{
+  palSourceStop(m_source);
+  palSourcei(m_source, AL_BUFFER, 0);
+
+  palDeleteBuffers(num_buffers, m_buffers.data());
+  palGenBuffers(num_buffers, (ALuint*)m_buffers.data());
+  //err = CheckALError("re-generating buffers");
+
+  next_buffer = 0;
+  num_buffers_queued = 0;
+
+  return S_OK;
+}
+
 REFERENCE_TIME COpenALStream::getSampleTime()
 {
-  double total_played_ms = m_total_played * 1000 / m_frequency;
+  double total_played_ms = static_cast<double>(m_total_played * 1000 / m_frequency);
 
   // Add played
   float offset = 0;
@@ -426,9 +506,9 @@ REFERENCE_TIME COpenALStream::getSampleTime()
     total_played_ms += offset * 1000;
   }
 
-  std::ostringstream string;
-  string << "Current start time: " << m_base_filter->m_tStart.GetUnits() << ". Buffered time in units of 100ns: " << static_cast<REFERENCE_TIME>(total_played_ms * UNITS / MILLISECONDS) << "." << std::endl;
-  OutputDebugStringA(string.str().c_str());
+  //std::ostringstream string;
+  //string << "Current start time: " << m_base_filter->m_tStart.GetUnits() << ". Buffered time in units of 100ns: " << static_cast<REFERENCE_TIME>(total_played_ms * UNITS / MILLISECONDS) << "." << std::endl;
+  //OutputDebugStringA(string.str().c_str());
 
   return static_cast<REFERENCE_TIME>(total_played_ms * UNITS / MILLISECONDS);
 }
@@ -531,183 +611,245 @@ size_t GetFrameSize(COpenALStream::SpeakerLayout speaker_layout, COpenALStream::
   return num_channels * element_size;
 }
 
-void COpenALStream::SoundLoop()
+//
+// StartStreaming
+//
+// This is called when we start running state
+//
+HRESULT COpenALStream::StartStreaming()
 {
-  uint32_t past_frequency = m_frequency;
-  SpeakerLayout past_speaker_layout = m_speaker_layout;
-  MediaBitness past_bitness = m_bitness;
+  CAutoLock cAutoLock(this);
 
-  bool float32_capable = palIsExtensionPresent("AL_EXT_float32");
-  bool surround_capable = palIsExtensionPresent("AL_EXT_MCFORMATS") || IsCreativeXFi();
+  // Are we already streaming
 
-  // As there is no extension to check for 32-bit fixed point support
-  // and we know that only a X-Fi with hardware OpenAL supports it,
-  // we just check if one is being used.
-  bool fixed32_capable = IsCreativeXFi();
-
-  uint32_t frames_per_buffer;
-  // Can't have zero samples per buffer
-  if (m_latency > 0)
+  if (m_bStreaming == true)
   {
-    frames_per_buffer = m_frequency / 1000 * m_latency / num_buffers;
+    return NOERROR;
+  }
+
+  m_bStreaming = true;
+  return NOERROR;
+} // StartStreaming
+
+  //
+  // StopStreaming
+  //
+  // This is called when we stop streaming
+  //
+HRESULT COpenALStream::StopStreaming()
+{
+  CAutoLock cAutoLock(this);
+
+  // Have we been stopped already
+
+  if (m_bStreaming == false)
+  {
+    return NOERROR;
+  }
+
+  m_total_played = 0;
+  m_bStreaming = false;
+  return NOERROR;
+} // StopStreaming
+
+HRESULT COpenALStream::setMediaType(const CMediaType* pmt)
+{
+  auto format = reinterpret_cast<const WAVEFORMATEX*>(pmt->Format());
+  HRESULT result = checkMediaType(format);
+  if (result == S_OK)
+  {
+    m_speaker_layout = ChannelsToSpeakerLayout(format->nChannels);
+    m_bitness = WaveformatToBitness(format);
+    m_frequency = format->nSamplesPerSec;
+    m_nChannels = format->nChannels;
+    m_nSamplesPerSec = format->nSamplesPerSec;
+    m_nBitsPerSample = format->wBitsPerSample;
+    m_nBlockAlign = format->nBlockAlign;
+    m_is_float = (format->wFormatTag == WAVE_FORMAT_IEEE_FLOAT);
+    if (m_is_float == false && format->wFormatTag == WAVE_FORMAT_EXTENSIBLE)
+    {
+      auto formatex = reinterpret_cast<const WAVEFORMATEXTENSIBLE*>(format);
+      if (formatex->SubFormat == KSDATAFORMAT_SUBTYPE_IEEE_FLOAT)
+      {
+        m_is_float = true;
+      }
+    }
+    return ResetBuffer();
+  }
+
+  return S_FALSE;
+}
+
+HRESULT COpenALStream::checkMediaType(const WAVEFORMATEX* wave_format)
+{
+  // Get supported layout
+  auto supported_bitness = getSupportedBitness();
+
+  // Get supported bitness
+  auto supported_layouts = getSupportedSpeakerLayout();
+  bool valid_channel_layout = false;
+  bool valid_sample_type = false;
+
+  // Normalize channels
+  SpeakerLayout speaker_layout;
+  try
+  {
+    speaker_layout = ChannelsToSpeakerLayout(wave_format->nChannels);
+  }
+  catch (const std::invalid_argument& e)
+  {
+    DebugPrintf(e.what());
+    return S_FALSE;
+  }
+
+  if (std::any_of(supported_layouts.cbegin(), supported_layouts.cend(),
+    [speaker_layout](SpeakerLayout layout) { return layout == speaker_layout; }))
+  {
+    valid_channel_layout = true;
   }
   else
   {
-    frames_per_buffer = m_frequency / 1000 * 1 / num_buffers;
+    return S_FALSE;
   }
 
-  std::ostringstream string;
-  string << "Using " << num_buffers << " buffers, each with " << frames_per_buffer <<
-    " audio frames for a total of " << frames_per_buffer * num_buffers << " frames." << std::endl;
-  OutputDebugStringA(string.str().c_str());
-  string.clear();
+  // Normalize bitness
+  MediaBitness media_bitness;
+  try
+  {
+    media_bitness = WaveformatToBitness(wave_format);
+  }
+  catch (const std::invalid_argument& e)
+  {
+    DebugPrintf(e.what());
+    return S_FALSE;
+  }
 
-  // Should we make these larger just in case the mixer ever sends more samples
-  // than what we request?
-  m_buffers.resize(num_buffers);
-  m_source = 0;
+  if (std::any_of(supported_bitness.cbegin(), supported_bitness.cend(),
+    [media_bitness](MediaBitness bitness) { return bitness == media_bitness; }))
+  {
+    valid_sample_type = true;
+  }
 
-  // Clear error state before querying or else we get false positives.
-  ALenum err = palGetError();
+  if (valid_channel_layout && valid_sample_type)
+  {
+    return S_OK;
+  }
 
-  // Generate some AL Buffers for streaming
-  palGenBuffers(num_buffers, (ALuint*)m_buffers.data());
-  err = CheckALError("generating buffers");
+  return S_FALSE;
+}
 
-  // Generate a Source to playback the Buffers
-  palGenSources(1, &m_source);
-  err = CheckALError("generating sources");
-
-  // Set the default sound volume as saved in the config file.
-  palSourcef(m_source, AL_GAIN, m_volume);
-
-  // TODO: Error handling
-  // ALenum err = alGetError();
-
-  unsigned int next_buffer = 0;
-
+void COpenALStream::PushToDevice(IMediaSample *pMediaSample)
+{
+  //waitobject
+  constexpr size_t bits_per_byte = 8;
+  BYTE *pWave = nullptr;
+  int  nBytes = 0;
   ALint state = 0;
 
-  std::vector<int8_t> byte_data;
-  while (m_run_thread)
+  ASSERT(pMediaSample);
+  if (!pMediaSample)
+    return;
+
+  pMediaSample->GetPointer(&pWave);
+  ASSERT(pWave != nullptr);
+
+  nBytes = pMediaSample->GetActualDataLength();
+  nBytes = nBytes - nBytes % (m_nChannels * m_nBitsPerSample / bits_per_byte);
+  if (nBytes == 0)
   {
-    if (m_mixer->IsStreaming())
+    return;
+  }
+
+  // Check if any buffer was played and release from the queue, else wait.
+  if (num_buffers_queued == num_buffers)
+  {
+    int num_buffers_processed = 0;
+    while (true)
     {
-      if (m_start_time != m_base_filter->m_tStart)
-      {
-        m_total_played = 0;
-        m_start_time = m_base_filter->m_tStart;
-      }
-
-      // Check if stream changed frequency, bitness or channel setup
-      if (past_frequency != m_frequency || past_bitness != m_bitness || past_speaker_layout != m_speaker_layout || m_start_time != m_base_filter->m_tStart)
-      {
-        // Stop source and clean-up buffers
-        palSourceStop(m_source);
-        palSourcei(m_source, AL_BUFFER, 0);
-
-        palDeleteBuffers(num_buffers, m_buffers.data());
-        palGenBuffers(num_buffers, (ALuint*)m_buffers.data());
-        err = CheckALError("re-generating buffers");
-
-        next_buffer = 0;
-        num_buffers_queued = 0;
-
-        if (m_latency > 0)
-        {
-          frames_per_buffer = m_frequency / 1000 * m_latency / num_buffers;
-        }
-        else
-        {
-          frames_per_buffer = m_frequency / 1000 * 1 / num_buffers;
-        }
-
-        past_frequency = m_frequency;
-        past_bitness = m_bitness;
-        past_speaker_layout = m_speaker_layout;
-      }
-
-      // Block until we have a free buffer
-      int num_buffers_processed = 0;
       palGetSourcei(m_source, AL_BUFFERS_PROCESSED, &num_buffers_processed);
       palGetSourcei(m_source, AL_SOURCE_STATE, &state);
-      if (num_buffers_queued == num_buffers && !num_buffers_processed)
+      // Buffer underrun
+      if (m_bStreaming && state != AL_PLAYING)
       {
-        std::this_thread::sleep_for(std::chrono::milliseconds(1));
-        continue;
+        palSourcePlay(m_source);
       }
-
-      // Remove the Buffer from the Queue.
-      if (num_buffers_processed)
+      if (num_buffers_processed > 0)
       {
         std::vector<ALuint> unqueued_buffer_ids(num_buffers);
         palSourceUnqueueBuffers(m_source, num_buffers_processed, unqueued_buffer_ids.data());
-        err = CheckALError("unqueuing buffers");
+        //err = CheckALError("unqueuing buffers");
 
         num_buffers_queued -= num_buffers_processed;
         for (int i = 0; i < num_buffers_processed; ++i)
         {
           m_total_played += m_buffer_size.front();
-          m_buffer_size.pop();
+          m_buffer_size.pop_front();
         }
-      }
-
-      size_t available_frames = 0;
-      size_t byte_per_sample = 0;
-      switch (m_bitness)
-      {
-      case bit8:
-        byte_per_sample = 1;
-        break;
-      case bit16:
-        byte_per_sample = 2;
-        break;
-      case bitfloat:
-      case bit32:
-        byte_per_sample = 4;
         break;
       }
-      available_frames = m_mixer->Mix(&byte_data, frames_per_buffer, byte_per_sample);
-
-      if (!available_frames)
-      {
-        continue;
-      }
-
-      palBufferData(m_buffers[next_buffer],
-        palGetEnumValue(GenerateFormatString(m_speaker_layout, m_bitness).c_str()),
-        byte_data.data(),
-        static_cast<ALsizei>(available_frames) * GetFrameSize(m_speaker_layout, m_bitness),
-        m_frequency);
-
-      err = CheckALError("buffering data");
-
-      palSourceQueueBuffers(m_source, 1, &m_buffers[next_buffer]);
-      m_buffer_size.push(available_frames);
-      err = CheckALError("queuing buffers");
-
-      num_buffers_queued++;
-      next_buffer = (next_buffer + 1) % num_buffers;
-
-      palGetSourcei(m_source, AL_SOURCE_STATE, &state);
-      if (state != AL_PLAYING)
-      {
-        // Buffer underrun occurred, resume playback
-        palSourcePlay(m_source);
-        err = CheckALError("occurred resuming playback");
-        OutputDebugStringA("Buffer underrun\n");
-        {
-          std::ostringstream string;
-          string << "Buffers queued: " << num_buffers_queued << "." << std::endl;
-          OutputDebugStringA(string.str().c_str());
-        }
-      }
-    }
-    else
-    {
       std::this_thread::sleep_for(std::chrono::milliseconds(1));
     }
   }
-}
 
+  // Push to buffer and release
+  palBufferData(m_buffers[next_buffer],
+    palGetEnumValue(GenerateFormatString(m_speaker_layout, m_bitness).c_str()),
+    pWave,
+    nBytes,
+    m_frequency);
+  palSourceQueueBuffers(m_source, 1, &m_buffers[next_buffer]);
+  num_buffers_queued++;
+  next_buffer = (next_buffer + 1) % num_buffers;
+
+  size_t m_rendered_samples = nBytes / m_nChannels / m_nBitsPerSample * bits_per_byte;
+  m_buffer_size.push_back(m_rendered_samples);
+  {
+    std::ostringstream string;
+    size_t samples = std::accumulate(m_buffer_size.begin(), m_buffer_size.end(), 0);
+    string << "Buffer sample size: " << samples << ". "; // pushed_bytes / m_nChannels / m_nBitsPerSample * bits_per_byte << " frames.\n";
+    string << "Seconds buffered: " << static_cast<double>(samples) / m_frequency << ".\n";
+    OutputDebugStringA(string.str().c_str());
+  }
+
+  palGetSourcei(m_source, AL_SOURCE_STATE, &state);
+  if (m_bStreaming && state != AL_PLAYING)
+  {
+    // Buffer underrun occurred, resume playback
+    palSourcePlay(m_source);
+    //err = CheckALError("occurred resuming playback");
+    OutputDebugStringA("Buffer underrun\n");
+    {
+      std::ostringstream string;
+      string << "Buffers queued: " << num_buffers_queued << "." << std::endl;
+      OutputDebugStringA(string.str().c_str());
+    }
+  }
+
+  //std::ostringstream string;
+  //string << "Size of the queue: " << pushed_bytes / m_nChannels / m_nBitsPerSample * bits_per_byte << " frames.\n";
+  //OutputDebugStringA(string.str().c_str());
+} // CopyWaveform
+
+HRESULT COpenALStream::Receive(IMediaSample * pSample)
+{
+  CheckPointer(pSample, E_POINTER);
+  CAutoLock cAutoLock(this);
+  ASSERT(pSample != nullptr);
+
+  REFERENCE_TIME tStart, tStop;
+  pSample->GetTime(&tStart, &tStop);
+
+  // Ignore zero-length samples
+  if ((m_LastMediaSampleSize = pSample->GetActualDataLength()) == 0)
+    return NOERROR;
+
+  if (m_bStreaming == true)
+  {
+    PushToDevice(pSample);
+
+    return NOERROR;
+  }
+
+  return NOERROR;
+}
 #endif  // _WIN32
